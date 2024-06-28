@@ -26,7 +26,10 @@
 #define VX_CONFIG_FILE      "/vxspan.json"
 #define VX_XDP_FILE         "/xdp_redirect.o"
 #define VX_XDP_PROG_SECTION "xdp_vlan_filter"
-#define VX_XDP_MODE XDP_FLAGS_SKB_MODE
+#define VX_XDP_HW  XDP_FLAGS_UPDATE_IF_NOEXIST|XDP_FLAGS_HW_MODE
+#define VX_XDP_DRV XDP_FLAGS_UPDATE_IF_NOEXIST|XDP_FLAGS_DRV_MODE
+#define VX_XDP_SKB XDP_FLAGS_UPDATE_IF_NOEXIST|XDP_FLAGS_SKB_MODE
+#define VX_XDP_MODE VX_XDP_SKB
 /* xdp_mode tested against vmxnet3 on vmware workstation 17.0x and esxi 7.x
  * => skb >> drv
  */

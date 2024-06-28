@@ -15,6 +15,7 @@
 #include "vx_models.h"
 #include "vx_network.h"
 
+static __u32 xdp_flags = VX_XDP_SKB;
 extern InterfaceCollection* interface_collection;
 
 int load_configuration();
@@ -71,6 +72,21 @@ int load_configuration() {
 		perror("Error: parsing JSON configuration failed");
 		free(json_config);
 		return -1;
+	}
+
+	cJSON *xdp_mode = cJSON_GetObjectItem(root, "xdp_mode");
+	if (cJSON_IsString(xdp_mode)) {
+		if (strcmp(xdp_mode->valuestring, "HW") == 0) {
+			xdp_flags = VX_XDP_HW;
+			puts("XDP mode set to HW");
+		} else if (strcmp(xdp_mode->valuestring, "DRV") == 0) {
+			xdp_flags = VX_XDP_DRV;
+			puts("XDP mode set to DrV");
+		} else if (strcmp(xdp_mode->valuestring, "SKB") == 0) {
+			xdp_flags = VX_XDP_SKB;
+			puts("XDP mode set to SKB");
+		} else
+			perror("Error: xdp_mode flag unsupported, expecting HW|DRV|SKB");
 	}
 
 	cJSON *interfaces = cJSON_GetObjectItem(root, "interfaces");
@@ -173,13 +189,22 @@ struct bpf_object *load_bpf_object(Interface* interface) {
 		return NULL;
 	}
 
-	if (bpf_xdp_attach(interface->if_index, prog_fd, XDP_FLAGS_UPDATE_IF_NOEXIST|VX_XDP_MODE, NULL) < 0) {
+	if (bpf_xdp_attach(interface->if_index, prog_fd, xdp_flags, NULL) < 0) {
 		perror("Error: attaching BPF program to the interface failed");
 		bpf_object__close(interface->bpf_prog);
 		return NULL;
 	}
-	lv_label_set_text(interface->xdp_mode, "SKB");
-	
+	switch (xdp_flags) {
+	case VX_XDP_HW:
+		lv_label_set_text(interface->xdp_mode, "HW");
+		break;
+	case VX_XDP_DRV:
+		lv_label_set_text(interface->xdp_mode, "DRV");
+		break;
+	case VX_XDP_SKB:
+		lv_label_set_text(interface->xdp_mode, "SKB");
+		break;
+	}
 	return interface->bpf_prog;
 }
 
@@ -249,7 +274,7 @@ int setup_redirections(struct bpf_object *bpf_obj, cJSON *redirect_map, Interfac
 				return -1;
 			}
 		}
-        printf("Adding VLAN XDP redirection %s (%u) to interface %s (%d)\n", vlan_str, vlan_id, interface_name, if_index);
+		printf("Adding VLAN XDP redirection:%d %s (%u) to interface %s (%d)\n", vlan_redirect_map_fd, vlan_str, vlan_id, interface_name, if_index);
 		if (bpf_map_update_elem(vlan_redirect_map_fd, &vlan_id, &if_index, BPF_ANY)) {
 			perror("Error: updating BPF map element failed");
 			return -1;
@@ -266,7 +291,7 @@ int setup_redirections(struct bpf_object *bpf_obj, cJSON *redirect_map, Interfac
 			vlan = vlan->next;
 		}
 		if (!exists) {
-	        printf("Adding VLAN %s (%u) to interface %s (%d)\n", vlan_str, vlan_id, interface_name, if_index);
+			printf("Adding VLAN %s (%u) to interface %s (%d)\n", vlan_str, vlan_id, interface_name, if_index);
 			vlan = add_or_update_vlan(interface, vlan_id);
 			if (!vlan) {
 				return -1;
@@ -282,7 +307,7 @@ void xdp_cleanup() {
 		return;
 	Interface* interface = interface_collection->input_head;
 	while (interface) {
-		if (bpf_xdp_detach(interface->if_index, VX_XDP_MODE, NULL) < 0) {
+		if (bpf_xdp_detach(interface->if_index, xdp_flags, NULL) < 0) {
 			perror("xdp_program__detach");
 		}
 		bpf_object__close(interface->bpf_prog);

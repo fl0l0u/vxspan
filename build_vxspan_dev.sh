@@ -16,7 +16,7 @@ mkdir build-dev release-dev
 
 # Application compilation
 echo "Building VxSpan:"
-docker build -f Dockerfile.dev -t vxspan-dev \
+docker build . -f Dockerfile.dev -t vxspan-dev \
 	&& echo "Done!" \
 	|| exit 1
 

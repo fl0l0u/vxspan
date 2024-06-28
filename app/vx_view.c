@@ -38,6 +38,7 @@ int create_background() {
     lv_obj_t* title = lv_label_create(scr);
     if (!title) {
         perror("lv_label_create allocation failed");
+        lv_obj_del(input_header);
         return -1;
     }
     lv_label_set_text(title, "  "VX_TITLE" "VX_VERSION);
@@ -48,6 +49,8 @@ int create_background() {
     lv_obj_t* output_header = lv_obj_create(scr);
     if (!output_header) {
         perror("lv_obj_create allocation failed");
+        lv_obj_del(title);
+        lv_obj_del(input_header);
         return -1;
     }
     lv_obj_set_size(output_header, 800, 16);
@@ -59,6 +62,9 @@ int create_background() {
     lv_obj_t* footer = lv_obj_create(scr);
     if (!footer) {
         perror("lv_obj_create allocation failed");
+        lv_obj_del(output_header);
+        lv_obj_del(title);
+        lv_obj_del(input_header);
         return -1;
     }
     lv_obj_set_size(footer, 800, 32);
@@ -251,7 +257,7 @@ static int update_interface_label(lv_obj_t* label, uint64_t val, uint64_t diff, 
             return -1;
         }
         break;
-    }    
+    }
     switch (flag) {
     // Bytes
     case RTNL_LINK_RX_BYTES:
@@ -329,7 +335,7 @@ int interfaces_chart_update() {
                                *prev = &iface->buffer.data[(start + i) % (VX_NETWORK_CHART_SIZE + 1)];
                 uint64_t rx_diff = curr->rx_bytes - prev->rx_bytes;
                 uint64_t tx_diff = curr->tx_bytes - prev->tx_bytes;
-            
+
                 lv_chart_set_next_value(interface_collection->network_chart, iface->rx_bytes,  (rx_diff >> shift_amount));
                 lv_chart_set_next_value(interface_collection->network_chart, iface->tx_bytes, -(tx_diff >> shift_amount));
             }
@@ -379,7 +385,7 @@ int interfaces_chart_update() {
             lv_chart_set_all_value(interface_collection->network_chart, iface->rx_dropped, LV_CHART_POINT_NONE);
             lv_chart_set_all_value(interface_collection->network_chart, iface->tx_packets, LV_CHART_POINT_NONE);
             lv_chart_set_all_value(interface_collection->network_chart, iface->tx_dropped, LV_CHART_POINT_NONE);
-            
+
             int start = (iface->buffer.head + VX_NETWORK_CHART_SIZE + 1 - iface->buffer.count) % (VX_NETWORK_CHART_SIZE + 1);
             for (int i = 0; i < (iface->buffer.count - 1); i++) {
                 InterfaceStats *curr = &iface->buffer.data[(start + i + 1) % (VX_NETWORK_CHART_SIZE + 1)],
@@ -388,7 +394,7 @@ int interfaces_chart_update() {
                 uint64_t rxd_diff = curr->rx_dropped - prev->rx_dropped;
                 uint64_t txp_diff = curr->tx_packets - prev->tx_packets;
                 uint64_t txd_diff = curr->tx_dropped - prev->tx_dropped;
-                
+
                 lv_chart_set_next_value(interface_collection->network_chart, iface->rx_packets,  (rxp_diff >> shift_amount));
                 lv_chart_set_next_value(interface_collection->network_chart, iface->rx_dropped,  (rxd_diff >> shift_amount));
                 lv_chart_set_next_value(interface_collection->network_chart, iface->tx_packets, -(txp_diff >> shift_amount));
@@ -498,7 +504,7 @@ int interfaces_chart_update() {
                                *prev = &iface->buffer.data[(start + i) % (VX_NETWORK_CHART_SIZE + 1)];
                 uint64_t rx_diff = curr->rx_bytes - prev->rx_bytes;
                 uint64_t tx_diff = curr->tx_bytes - prev->tx_bytes;
-            
+
                 lv_chart_set_next_value(interface_collection->network_chart, iface->rx_bytes,  (rx_diff >> shift_amount));
                 lv_chart_set_next_value(interface_collection->network_chart, iface->tx_bytes, -(tx_diff >> shift_amount));
             }
@@ -526,7 +532,7 @@ int interfaces_chart_update() {
             lv_chart_set_all_value(interface_collection->network_chart, iface->rx_dropped, LV_CHART_POINT_NONE);
             lv_chart_set_all_value(interface_collection->network_chart, iface->tx_packets, LV_CHART_POINT_NONE);
             lv_chart_set_all_value(interface_collection->network_chart, iface->tx_dropped, LV_CHART_POINT_NONE);
-            
+
             int start = (iface->buffer.head + VX_NETWORK_CHART_SIZE + 1 - iface->buffer.count) % (VX_NETWORK_CHART_SIZE + 1);
             for (int i = 0; i < (iface->buffer.count - 1); i++) {
                 InterfaceStats *curr = &iface->buffer.data[(start + i + 1) % (VX_NETWORK_CHART_SIZE + 1)],
@@ -535,7 +541,7 @@ int interfaces_chart_update() {
                 uint64_t rxd_diff = curr->rx_dropped - prev->rx_dropped;
                 uint64_t txp_diff = curr->tx_packets - prev->tx_packets;
                 uint64_t txd_diff = curr->tx_dropped - prev->tx_dropped;
-                
+
                 lv_chart_set_next_value(interface_collection->network_chart, iface->rx_packets,  (rxp_diff >> shift_amount));
                 lv_chart_set_next_value(interface_collection->network_chart, iface->rx_dropped,  (rxd_diff >> shift_amount));
                 lv_chart_set_next_value(interface_collection->network_chart, iface->tx_packets, -(txp_diff >> shift_amount));

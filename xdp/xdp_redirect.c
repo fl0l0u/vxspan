@@ -106,8 +106,8 @@ struct {
 struct dot1q {
 	unsigned char h_dest[6];   /* destination eth addr */
 	unsigned char h_source[6]; /* source ether addr	*/
-	__be16		h_proto;	 /* packet type ID field */
-	__be16		vlan_tcid;   /* VLAN TCI field	   */
+	__be16 h_proto;	  /* packet type ID field */
+	__be16 vlan_tcid; /* VLAN TCI field	   */
 };
 
 static __always_inline void update_statistics(__u32 vlan_id, int size) {
@@ -155,12 +155,6 @@ int xdp_vlan_filter(struct xdp_md *ctx) {
 		vlan_id = bpf_ntohs(vlan_hdr->vlan_tcid) & VLAN_VID_MASK;
 	}
 
-	ifindex = bpf_map_lookup_elem(&vlan_redirect_map, &vlan_id);
-	if (!ifindex) {
-		register_drop(vlan_id);
-		return XDP_DROP;
-	}
-
 	// Lookup global redirect interface (if any)
 	__u32 global_vlan_key = 4095; // Key for global redirection
 	__u32 *global_ifindex = bpf_map_lookup_elem(&vlan_redirect_map, &global_vlan_key);
@@ -177,6 +171,7 @@ int xdp_vlan_filter(struct xdp_md *ctx) {
 	}
 
 	// Redirect the packet to the specified interface
+	ifindex = bpf_map_lookup_elem(&vlan_redirect_map, &vlan_id);
 	if (ifindex && *ifindex != 0) {
 		if (bpf_redirect(*ifindex, 0) == XDP_REDIRECT) {
 			// Update statistics for specific VLAN

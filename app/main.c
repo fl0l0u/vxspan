@@ -59,8 +59,7 @@ int main(int argc, char const *argv[]) {
     MemoryCollection* memory_collection;
 
 #ifndef VX_DEV
-    if (setup_filesystems() < 0)
-        exit(EXIT_FAILURE);
+    setup_filesystems();
 #endif
 
     // Set up signal handlers for cleanup
@@ -122,7 +121,7 @@ int main(int argc, char const *argv[]) {
     new_value.it_interval.tv_sec  = VX_REFRESH_TIME / 1000000000L;
     new_value.it_interval.tv_nsec = VX_REFRESH_TIME % 1000000000L;
 
-    int fd = timerfd_create(CLOCK_REALTIME, 0);
+    int fd = timerfd_create(CLOCK_MONOTONIC, 0);
     if (fd == -1) {
         perror("timerfd_create");
         cleanup(0);

@@ -1,5 +1,6 @@
 FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive \
+  BPFTOOL_VERSION=7.4.0 \
   CJON_VERSION=1.7.18 \
   ELFUTILS_VERSION=0.191 \
   KERNEL_VERSION=6.9.6 \
@@ -80,6 +81,16 @@ RUN cd /build && \
   LIBDIR=/lib/x86_64-linux-gnu make install -j $(nproc) --silent && \
   ldconfig
 
+# - bpftool
+RUN cd /build && \
+  wget -q "https://github.com/libbpf/bpftool/archive/refs/tags/v${BPFTOOL_VERSION}.zip" && \
+  unzip "v${BPFTOOL_VERSION}.zip" && \
+  cd "bpftool-${BPFTOOL_VERSION}" && \
+  rmdir libbpf && \
+  ln -s "/build/libbpf-${LIBBPF_VERSION}" libbpf && \
+  cd src && \
+  EXTRA_CFLAGS=--static make -j $(nproc) --silent
+
 # - libnl-3
 RUN cd /build && \
   wget -qO- "https://github.com/thom311/libnl/releases/download/libnl$(echo ${LIBNL_VERSION}|tr '.' '_')/libnl-${LIBNL_VERSION}.tar.gz" | tar zxf - && \
@@ -107,7 +118,7 @@ RUN cd /build && \
   make install -j $(nproc) --silent && \
   ldconfig
 
-# ethtool
+# - ethtool
 RUN cd /build/ && \
   git clone --recursive https://git.launchpad.net/ubuntu/+source/ethtool && \
   cd ethtool && \
@@ -144,8 +155,8 @@ ADD etc /build/initramfs/etc
 RUN cd /build/initramfs && \
   ln -s /bin/busybox init && \
   chmod +x etc/init.d/rcS && \
-  cp /build/lv_port_linux_frame_buffer/bin/main /build/ethtool/ethtool bin/&& \
-  chmod +x bin/main bin/ethtool && \
+  cp /build/lv_port_linux_frame_buffer/bin/main /build/ethtool/ethtool /build/bpftool-${BPFTOOL_VERSION}/src/bpftool bin/ && \
+  chmod +x bin/main bin/ethtool bin/bpftool && \
   cp /usr/bin/busybox bin/busybox && \
   for cmd in arp ash awk base64 bc brctl cat chgrp chmod chown chvt clear cmp cp date dd df diff dmesg du echo env false findgrep groups halt head hexdump hostname hwclock id ifconfig ifdown ifup init ip kill killallless less ln loadkmap ls lsscsi mdev mkdirmore mount mv nc netstat nproc ping poweroff printf ps pwd rebootrm rmdir route sed sh sleep sort stat static-sh strings stty suswapoff swapon sysctl tail tar tee telnet test time top touch tr traceroute traceroute6 true truncate tty umount uname uniq unlink uptime usleep vconfig vi watch wc wget which who whoami xargs xxd; do \
     ln -s /bin/busybox bin/$cmd;\

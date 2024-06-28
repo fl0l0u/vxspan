@@ -561,16 +561,16 @@ int interfaces_chart_update() {
             switch (selector.display_mode) {
 
             case VX_DISPLAY_BYTES:
-                update_interface_label(interface_collection->network_rx_label, curr->rx_bytes, rx_diff, iface->buffer.count, iface->diff_sma.rx_bytes, RTNL_LINK_RX_BYTES);
-                update_interface_label(interface_collection->network_tx_label, curr->tx_bytes, tx_diff, iface->buffer.count, iface->diff_sma.tx_bytes, RTNL_LINK_TX_BYTES);
+                update_interface_label(interface_collection->network_rx_label, curr->rx_bytes, rx_diff, iface->buffer.count - 1, iface->diff_sma.rx_bytes, RTNL_LINK_RX_BYTES);
+                update_interface_label(interface_collection->network_tx_label, curr->tx_bytes, tx_diff, iface->buffer.count - 1, iface->diff_sma.tx_bytes, RTNL_LINK_TX_BYTES);
                 break;
             case VX_DISPLAY_PACKETS:
-                update_interface_label(interface_collection->network_rx_label, curr->rx_packets, rxp_diff, iface->buffer.count, iface->diff_sma.rx_packets, RTNL_LINK_RX_PACKETS);
-                update_interface_label(interface_collection->network_tx_label, curr->tx_packets, txp_diff, iface->buffer.count, iface->diff_sma.tx_packets, RTNL_LINK_TX_PACKETS);
+                update_interface_label(interface_collection->network_rx_label, curr->rx_packets, rxp_diff, iface->buffer.count - 1, iface->diff_sma.rx_packets, RTNL_LINK_RX_PACKETS);
+                update_interface_label(interface_collection->network_tx_label, curr->tx_packets, txp_diff, iface->buffer.count - 1, iface->diff_sma.tx_packets, RTNL_LINK_TX_PACKETS);
                 break;
             case VX_DISPLAY_DROPPED:
-                update_interface_label(interface_collection->network_rx_label, curr->rx_dropped, rxd_diff, iface->buffer.count, iface->diff_sma.rx_dropped, RTNL_LINK_RX_DROPPED);
-                update_interface_label(interface_collection->network_tx_label, curr->tx_dropped, txd_diff, iface->buffer.count, iface->diff_sma.tx_dropped, RTNL_LINK_TX_DROPPED);
+                update_interface_label(interface_collection->network_rx_label, curr->rx_dropped, rxd_diff, iface->buffer.count - 1, iface->diff_sma.rx_dropped, RTNL_LINK_RX_DROPPED);
+                update_interface_label(interface_collection->network_tx_label, curr->tx_dropped, txd_diff, iface->buffer.count - 1, iface->diff_sma.tx_dropped, RTNL_LINK_TX_DROPPED);
             }
         }
     }

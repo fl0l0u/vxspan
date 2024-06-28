@@ -7,6 +7,7 @@
 #include <netlink/netlink.h>
 #include <netlink/route/link.h>
 #include <sys/sysinfo.h>
+#include <sys/resource.h>
 #include <netlink/cache.h>
 #include <bpf/libbpf.h>
 #include <bpf/bpf.h>
@@ -56,7 +57,7 @@ int collect_interfaces_data(InterfaceCollection* collection) {
                 int vlan_id = key;
                 struct vlan_stats value;
                 if (bpf_map_lookup_elem(map_fd, &key, &value) < 0) {
-                    printf("DEBUG %d, %d, %x\n", map_fd, key, &value);
+                    printf("DEBUG %d, %lld, %x\n", map_fd, key, &value);
                     perror("collect_interfaces_data: bpf_map_lookup_elem");
                     return -1;
                 }
@@ -148,6 +149,7 @@ int collect_memory_data(MemoryCollection* collection) {
         return -1;
     }
     // Self
+    /*
     FILE *file;
     char fstatm[1024];
     file = fopen("/proc/self/status", "r");
@@ -170,6 +172,10 @@ int collect_memory_data(MemoryCollection* collection) {
     }
     fclose(file);
     update_memory_data(memory->next, vmrss*1000);
+*/
+    struct rusage r_usage;
+    getrusage(RUSAGE_SELF,&r_usage);
+    update_memory_data(memory->next, r_usage.ru_maxrss*1024);
 
     return 0;
 }

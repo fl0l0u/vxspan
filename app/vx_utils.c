@@ -1,5 +1,6 @@
 #include <inttypes.h>
 #include <linux/vt.h>
+#include <linux/if.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,7 +15,7 @@
 bool active_tty() {
     FILE *file;
     char active_tty[100];
-    char *current_tty;
+    char current_tty[IFNAMSIZ];
 
     file = fopen("/sys/class/tty/tty0/active", "r");
     if (file == NULL) {
@@ -28,8 +29,7 @@ bool active_tty() {
     }
     fclose(file);
 
-    current_tty = ttyname(STDIN_FILENO);
-    if (current_tty == NULL) {
+    if(ttyname_r(STDIN_FILENO, current_tty, IFNAMSIZ) != 0) {
         perror("Error getting current TTY");
         exit(EXIT_FAILURE);
     }
@@ -70,20 +70,22 @@ char* calculate_size(uint64_t size) {
 }
 
 void interface_update_sma(Interface* interface) {
-    InterfaceStats stats;
     if (interface->buffer.count < 2)
         return;
-    double acc_rx_bytes, acc_rx_packets, acc_rx_dropped, acc_tx_bytes, acc_tx_packets, acc_tx_dropped;
+    uint64_t diff_rx_bytes = 0, diff_rx_packets = 0, diff_rx_dropped = 0,
+             diff_tx_bytes = 0, diff_tx_packets = 0, diff_tx_dropped = 0;
+	double acc_rx_bytes = 0, acc_rx_packets = 0, acc_rx_dropped = 0,
+	       acc_tx_bytes = 0, acc_tx_packets = 0, acc_tx_dropped = 0;
     int start = (interface->buffer.head + VX_NETWORK_CHART_SIZE + 1 - interface->buffer.count) % (VX_NETWORK_CHART_SIZE + 1);
-     for(int i = 0; i < interface->buffer.count - 1; i++) {
+    for(int i = 0; i < interface->buffer.count - 1; i++) {
          InterfaceStats *curr = &interface->buffer.data[(start + i + 1) % (VX_NETWORK_CHART_SIZE + 1)],
                         *prev = &interface->buffer.data[(start + i) % (VX_NETWORK_CHART_SIZE + 1)];
-        uint64_t diff_rx_bytes   = curr->rx_bytes   - prev->rx_bytes;
-        uint64_t diff_rx_packets = curr->rx_packets - prev->rx_packets;
-        uint64_t diff_rx_dropped = curr->rx_dropped - prev->rx_dropped;
-        uint64_t diff_tx_bytes   = curr->tx_bytes   - prev->tx_bytes;
-        uint64_t diff_tx_packets = curr->tx_packets - prev->tx_packets;
-        uint64_t diff_tx_dropped = curr->tx_dropped - prev->tx_dropped;
+        diff_rx_bytes   = curr->rx_bytes   - prev->rx_bytes;
+        diff_rx_packets = curr->rx_packets - prev->rx_packets;
+        diff_rx_dropped = curr->rx_dropped - prev->rx_dropped;
+        diff_tx_bytes   = curr->tx_bytes   - prev->tx_bytes;
+        diff_tx_packets = curr->tx_packets - prev->tx_packets;
+        diff_tx_dropped = curr->tx_dropped - prev->tx_dropped;
         if (interface->diff_max.rx_bytes < diff_rx_bytes)
             interface->diff_max.rx_bytes = diff_rx_bytes;
         if (interface->diff_max.rx_packets < diff_rx_packets)
@@ -109,6 +111,12 @@ void interface_update_sma(Interface* interface) {
         if (curr->tx_dropped >= prev->tx_dropped)
             acc_tx_dropped += (double)diff_tx_dropped;
     }
+    interface->diff.rx_bytes   = diff_rx_bytes;
+    interface->diff.rx_packets = diff_rx_packets;
+    interface->diff.rx_dropped = diff_rx_dropped;
+    interface->diff.tx_bytes   = diff_tx_bytes;
+    interface->diff.tx_packets = diff_tx_packets;
+    interface->diff.tx_dropped = diff_tx_dropped;
     interface->diff_sma.rx_bytes   = (uint64_t)(acc_rx_bytes   / (double)interface->buffer.count);
     interface->diff_sma.rx_packets = (uint64_t)(acc_rx_packets / (double)interface->buffer.count);
     interface->diff_sma.rx_dropped = (uint64_t)(acc_rx_dropped / (double)interface->buffer.count);
@@ -117,17 +125,17 @@ void interface_update_sma(Interface* interface) {
     interface->diff_sma.tx_dropped = (uint64_t)(acc_tx_dropped / (double)interface->buffer.count);
 }
 void vlan_update_sma(Vlan* vlan) {
-    InterfaceStats stats;
     if (vlan->buffer.count < 2)
         return;
-    double acc_rx_bytes, acc_rx_packets, acc_rx_dropped, acc_tx_bytes, acc_tx_packets, acc_tx_dropped;
+    uint64_t diff_rx_bytes = 0, diff_rx_packets = 0, diff_rx_dropped = 0;
+    double acc_rx_bytes = 0, acc_rx_packets = 0, acc_rx_dropped = 0;
     int start = (vlan->buffer.head + VX_NETWORK_CHART_SIZE + 1 - vlan->buffer.count) % (VX_NETWORK_CHART_SIZE + 1);
     for(int i = 0; i < vlan->buffer.count - 1; i++) {
          InterfaceStats *curr = &vlan->buffer.data[(start + i + 1) % (VX_NETWORK_CHART_SIZE + 1)],
                         *prev = &vlan->buffer.data[(start + i) % (VX_NETWORK_CHART_SIZE + 1)];
-        uint64_t diff_rx_bytes   = curr->rx_bytes   - prev->rx_bytes;
-        uint64_t diff_rx_packets = curr->rx_packets - prev->rx_packets;
-        uint64_t diff_rx_dropped = curr->rx_dropped - prev->rx_dropped;
+        diff_rx_bytes   = curr->rx_bytes   - prev->rx_bytes;
+        diff_rx_packets = curr->rx_packets - prev->rx_packets;
+        diff_rx_dropped = curr->rx_dropped - prev->rx_dropped;
         if (vlan->diff_max.rx_bytes < diff_rx_bytes)
             vlan->diff_max.rx_bytes = diff_rx_bytes;
         if (vlan->diff_max.rx_packets < diff_rx_packets)
@@ -139,6 +147,9 @@ void vlan_update_sma(Vlan* vlan) {
         acc_rx_packets += (double)diff_rx_packets;
         acc_rx_dropped += (double)diff_rx_dropped;
     }
+    vlan->diff.rx_bytes   = diff_rx_bytes;
+    vlan->diff.rx_packets = diff_rx_packets;
+    vlan->diff.rx_dropped = diff_rx_dropped;
     vlan->diff_sma.rx_bytes   = (uint64_t)(acc_rx_bytes   / (double)vlan->buffer.count);
     vlan->diff_sma.rx_packets = (uint64_t)(acc_rx_packets / (double)vlan->buffer.count);
     vlan->diff_sma.rx_dropped = (uint64_t)(acc_rx_dropped / (double)vlan->buffer.count);

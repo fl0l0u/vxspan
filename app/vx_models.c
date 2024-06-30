@@ -713,10 +713,7 @@ void update_vlan_data(Vlan* vlan, InterfaceStats interface_stats) {
 }
 
 int init_circular_buffer(InterfaceBuffer* buffer) {
-    if (memset(buffer->data, 0, sizeof(buffer->data)) < 0) {
-        perror("init_circular_buffer memset");
-        return -1;
-    }
+    memset(buffer->data, 0, sizeof(buffer->data));
     buffer->head = 0;
     buffer->count = 0;
     return 0;
@@ -798,6 +795,7 @@ Cpu* add_cpu(CpuCollection* collection, int id) {
     lv_obj_t* cpu_label = lv_label_create(lv_scr_act());
     if (!cpu_label) {
         perror("lv_label_create allocation failed");
+        free(new_cpu);
         return NULL;
     }
     lv_obj_set_size(cpu_label, 95, 32);

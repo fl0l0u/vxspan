@@ -109,19 +109,21 @@ bool interface_is_promisc(const int if_index) {
 
 int interface_disable_rxvlan(const char* ifname) {
 	char cmdline[64];
-	if(sprintf(cmdline, "ethtool -K %.16s rx-vlan-offload off", ifname) < 0) {
+	if(sprintf(cmdline, "/bin/ethtool -K %.16s rx-vlan-offload off", ifname) < 0) {
 		perror("cmdline sprintf");
 		return -1;
 	}
+	printf("%s\n", cmdline);
 	int ret = system(cmdline);
 	return ret;
 }
 int interface_disable_txvlan(const char* ifname) {
 	char cmdline[64];
-	if(sprintf(cmdline, "ethtool -K %.16s tx-vlan-offload off", ifname) < 0) {
+	if(sprintf(cmdline, "/bin/ethtool -K %.16s tx-vlan-offload off", ifname) < 0) {
 		perror("cmdline sprintf");
 		return -1;
 	}
+	printf("%s\n", cmdline);
 	int ret = system(cmdline);
 	return ret;
 }

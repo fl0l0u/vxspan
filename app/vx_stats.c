@@ -47,7 +47,6 @@ int collect_interfaces_data(InterfaceCollection* collection) {
             return -1;
         update_interface_data(interface, interface_stats);
 
-        int if_index = interface->if_index;
         int map_fd = interface->vlan_stats_fd;
         long long key, prev_key;
         key = -1;
@@ -57,14 +56,15 @@ int collect_interfaces_data(InterfaceCollection* collection) {
                 int vlan_id = key;
                 struct vlan_stats value;
                 if (bpf_map_lookup_elem(map_fd, &key, &value) < 0) {
-                    printf("DEBUG %d, %lld, %x\n", map_fd, key, &value);
+                    printf("DEBUG %d, %lld, %u\n", map_fd, key, &value);
                     perror("collect_interfaces_data: bpf_map_lookup_elem");
                     return -1;
                 }
-                InterfaceStats interface_stats;
-                interface_stats.rx_bytes   = value.bytes;
-                interface_stats.rx_packets = value.packets;
-                interface_stats.rx_dropped = value.dropped;
+                InterfaceStats interface_stats = {
+                    .rx_bytes   = value.bytes,
+                    .rx_packets = value.packets,
+                    .rx_dropped = value.dropped
+                };
                 Vlan* vlan = add_or_update_vlan(interface, vlan_id);
                 if (!vlan)
                     return -1;
@@ -110,7 +110,7 @@ int collect_cpus_data(CpuCollection* collection) {
 
     Cpu* cpu = collection->head;
     char buffer[256];
-    int cpu_index, cpus_count = sysconf(_SC_NPROCESSORS_ONLN), i = 0;
+    int cpu_index, i = 0;
     unsigned long user, nice, system, idle, iowait, irq, softirq, total, busy;
     while (fgets(buffer, sizeof(buffer), file) && cpu) {
         if (sscanf(buffer, "cpu%d %lu %lu %lu %lu %lu %lu %lu", &cpu_index, &user, &nice, &system, &idle, &iowait, &irq, &softirq) == 8) {

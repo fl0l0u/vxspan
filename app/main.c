@@ -28,20 +28,27 @@ Selector selector;
 pthread_mutex_t main_mutex;
 InterfaceCollection* interface_collection;
 
-int setup_filesystems() {
+void setup_filesystems() {
     if (mount("none", "/dev", "devtmpfs", 0, NULL) != 0) {
         perror("Error mounting devtmpfs");
-        return -1;
     }
     if (mount("none", "/proc", "proc", 0, NULL) != 0) {
         perror("Error mounting proc");
-        return -1;
     }
     if (mount("none", "/sys", "sysfs", 0, NULL) != 0) {
         perror("Error mounting sysfs");
-        return -1;
     }
-    return 0;
+    if (system("/bin/mdev -s") != 0) {
+        perror("Error running mdev");
+    }
+    // echo /bin/mdev > /proc/sys/kernel/hotplug
+    int fd = open("sys/class/leds/NAME:COLOR:LOCATION/brightness", O_WRONLY);
+    if (fd != 1) {
+        write(fd, "/bin/mdev", 9);
+        close(fd);
+    } else {
+        perror("Error writing /bin/mdev to /proc/sys/kernel/hotplug");
+    }
 }
 
 void cleanup(int sig) {
@@ -121,7 +128,7 @@ int main(int argc, char const *argv[]) {
     new_value.it_interval.tv_sec  = VX_REFRESH_TIME / 1000000000L;
     new_value.it_interval.tv_nsec = VX_REFRESH_TIME % 1000000000L;
 
-    int fd = timerfd_create(CLOCK_MONOTONIC, 0);
+    int fd = timerfd_create(CLOCK_REALTIME, 0);
     if (fd == -1) {
         perror("timerfd_create");
         cleanup(0);

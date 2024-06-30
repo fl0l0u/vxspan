@@ -1,5 +1,6 @@
 FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive \
+  BUSYBOX_VERSION=1.36.1 \
   CJON_VERSION=1.7.18 \
   ELFUTILS_VERSION=0.191 \
   KERNEL_VERSION=6.9.6 \
@@ -107,7 +108,7 @@ RUN cd /build && \
   make install -j $(nproc) --silent && \
   ldconfig
 
-# ethtool
+# - ethtool
 RUN cd /build/ && \
   git clone --recursive https://git.launchpad.net/ubuntu/+source/ethtool && \
   cd ethtool && \
@@ -115,6 +116,13 @@ RUN cd /build/ && \
   ./autogen.sh && \
   ./configure --disable-pretty-dump && \
   make -j $(nproc) CFLAGS="-O2 -static" --silent
+
+# - busybox
+RUN cd /build && \
+  wget -qO- "https://busybox.net/downloads/busybox-${BUSYBOX_VERSION}.tar.bz2" | tar jxf -
+ADD .config.busybox /build/busybox-${BUSYBOX_VERSION}/.config
+RUN cd "/build/busybox-${BUSYBOX_VERSION}" && \
+  ARCH=x86_64 make -j $(nproc) --silent
 
 # LVGL app
 RUN cd /build && \
@@ -139,10 +147,12 @@ RUN cd /build && \
   mkdir initramfs && \
   cd initramfs && \
   mkdir -p dev proc sys bin
+ADD etc /build/initramfs/etc
 RUN cd /build/initramfs && \
-  ln -s /bin/main init && \
-  cp /build/lv_port_linux_frame_buffer/bin/main /build/ethtool/ethtool bin/&& \
-  chmod +x bin/main bin/ethtool && \
+  ln -s /bin/busybox init && \
+  ln -s /bin/busybox bin/mdev && \
+  cp /build/lv_port_linux_frame_buffer/bin/main /build/ethtool/ethtool /build/busybox-${BUSYBOX_VERSION}/busybox bin/ && \
+  chmod +x bin/main bin/ethtool bin/busybox && \
   cp /build/xdp_redirect.o . && \
   cp /build/vxspan.json . && \
   find . -print0 | cpio --null -o --format=newc | xz --format=lzma > /build/rootfs.xz
@@ -158,4 +168,4 @@ menuentry 'vxspan' --class os {\n\
     linux /boot/bzImage vga=789 tsc=unstable ipv6.disable=1 init=/bin/sh\n\
     initrd /boot/initramfs\n\
 }" > /build/iso/boot/grub/grub.cfg && \
-  grub-mkrescue -o vxspan.iso iso/
+  grub-mkrescue --install-modules="biosdisk iso9660 multiboot" --fonts="ascii" -o vxspan.iso iso/

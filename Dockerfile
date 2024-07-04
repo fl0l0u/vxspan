@@ -26,6 +26,7 @@ RUN \
     clang \
     cmake \
     cpio \
+    dos2unix \
     flex \
     git \
     gawk \
@@ -146,13 +147,20 @@ ADD vxspan.json /build/vxspan.json
 RUN cd /build && \
   mkdir initramfs && \
   cd initramfs && \
-  mkdir -p dev proc sys bin
+  mkdir -p bin dev proc sys 
 ADD etc /build/initramfs/etc
+RUN dos2unix /build/initramfs/etc/inittab /build/initramfs/etc/init.d/rcS
 RUN cd /build/initramfs && \
+  cp /build/lv_port_linux_frame_buffer/bin/main \
+     /build/ethtool/ethtool \
+     /build/busybox-${BUSYBOX_VERSION}/busybox \
+     bin/ && \
+  chmod +x bin/* && \
   ln -s /bin/busybox init && \
+  ln -s /bin/busybox bin/loadkmap && \
   ln -s /bin/busybox bin/mdev && \
-  cp /build/lv_port_linux_frame_buffer/bin/main /build/ethtool/ethtool /build/busybox-${BUSYBOX_VERSION}/busybox bin/ && \
-  chmod +x bin/main bin/ethtool bin/busybox && \
+  ln -s /bin/busybox bin/mount && \
+  ln -s /bin/busybox bin/sh && \
   cp /build/xdp_redirect.o . && \
   cp /build/vxspan.json . && \
   find . -print0 | cpio --null -o --format=newc | xz --format=lzma > /build/rootfs.xz

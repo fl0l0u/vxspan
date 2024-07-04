@@ -16,7 +16,7 @@ mkdir build release
 
 # Application compilation
 echo "Building VxSpan:"
-docker build . -t vxspan-build \
+docker build . -t vxspan-build --network=host \
 	&& echo "Done!" \
 	|| exit 1
 

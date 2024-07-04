@@ -81,6 +81,7 @@ static __always_inline void __write_once_size(volatile void *p, void *res, int s
 struct vlan_stat {
 	__u64 bytes;
 	__u64 packets;
+	__u64 dropped_bytes;
 	__u64 dropped;
 };
 
@@ -116,16 +117,17 @@ static __always_inline void update_statistics(__u32 vlan_id, int size) {
 		NO_TEAR_ADD(stats->bytes, size);
 		NO_TEAR_INC(stats->packets);
 	} else {
-		struct vlan_stat new_stats = {.bytes = size, .packets = 1, .dropped = 0};
+		struct vlan_stat new_stats = {.bytes = size, .packets = 1, .dropped_bytes = 0, .dropped = 0};
 		bpf_map_update_elem(&vlan_stats, &vlan_id, &new_stats, BPF_ANY);
 	}
 }
-static __always_inline void register_drop(__u32 vlan_id) {
+static __always_inline void register_drop(__u32 vlan_id, int size) {
 	struct vlan_stat *stats = bpf_map_lookup_elem(&vlan_stats, &vlan_id);
 	if (stats) {
+		NO_TEAR_ADD(stats->dropped_bytes, size);
 		NO_TEAR_INC(stats->dropped);
 	} else {
-		struct vlan_stat new_stats = {.bytes = 0, .packets = 0, .dropped = 1};
+		struct vlan_stat new_stats = {.bytes = 0, .packets = 0, .dropped_bytes = 1, .dropped = 1};
 		bpf_map_update_elem(&vlan_stats, &vlan_id, &new_stats, BPF_ANY);
 	}
 }
@@ -138,10 +140,12 @@ int xdp_vlan_filter(struct xdp_md *ctx) {
 	struct dot1q *vlan_hdr;
 	__u32 vlan_id = 0; // Default VLAN ID for untagged packets
 	__u32 *ifindex = NULL;
+	__u32 global_vlan_key = 4095; // Key for global redirection
 
 	// Check if the packet is large enough to contain Ethernet header
 	if ((void*)eth + sizeof(*eth) > data_end) {
-		register_drop(vlan_id);
+		register_drop(vlan_id, data_end - data);
+		register_drop(global_vlan_key, data_end - data);
 		return XDP_DROP;
 	}
 
@@ -149,14 +153,14 @@ int xdp_vlan_filter(struct xdp_md *ctx) {
 	if (eth->h_proto == bpf_htons(ETH_P_8021Q) || eth->h_proto == bpf_htons(ETH_P_8021AD)) {
 		vlan_hdr = (void*)eth;
 		if ((void*)vlan_hdr + sizeof(*vlan_hdr) > data_end) {
-			register_drop(vlan_id);
+			register_drop(vlan_id, data_end - data);
+			register_drop(global_vlan_key, data_end - data);
 			return XDP_DROP;
 		}
 		vlan_id = bpf_ntohs(vlan_hdr->vlan_tcid) & VLAN_VID_MASK;
 	}
 
 	// Lookup global redirect interface (if any)
-	__u32 global_vlan_key = 4095; // Key for global redirection
 	__u32 *global_ifindex = bpf_map_lookup_elem(&vlan_redirect_map, &global_vlan_key);
 
 	if (global_ifindex && *global_ifindex != 0) {
@@ -176,12 +180,14 @@ int xdp_vlan_filter(struct xdp_md *ctx) {
 		if (bpf_redirect(*ifindex, 0) == XDP_REDIRECT) {
 			// Update statistics for specific VLAN
 			update_statistics(vlan_id, data_end - data);
+			update_statistics(global_vlan_key, data_end - data);
 			return XDP_REDIRECT;
 		}
 	}
 
 	// No redirection criteria matched or interface index is 0, drop the packet
-	register_drop(vlan_id);
+	register_drop(vlan_id, data_end - data);
+	register_drop(global_vlan_key, data_end - data);
 	return XDP_DROP;
 }
 

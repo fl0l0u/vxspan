@@ -36,7 +36,7 @@
 
 // UI
 #define VX_TITLE   "VxSpan"
-#define VX_VERSION "0.1.0"
+#define VX_VERSION "0.1.1"
 
 #define VX_RED_PALETTE    lv_palette_main(LV_PALETTE_RED)
 #define VX_GREEN_PALETTE  lv_palette_main(LV_PALETTE_GREEN)
@@ -46,6 +46,21 @@
 #define VX_PURPLE_PALETTE lv_palette_main(LV_PALETTE_PURPLE)
 #define VX_GREY_COLOR  lv_color_hex(0x212529)
 #define VX_WHITE_COLOR lv_color_hex(0xffffff)
+
+#define VX_INPUT_RX_COLOR  VX_GREEN_PALETTE
+#define VX_INPUT_RXD_COLOR VX_RED_PALETTE
+#define VX_INPUT_TX_COLOR  VX_ORANGE_PALETTE
+#define VX_INPUT_TXD_COLOR VX_PURPLE_PALETTE
+
+#define VX_VLAN_RX_COLOR  VX_GREEN_PALETTE
+#define VX_VLAN_RXD_COLOR VX_RED_PALETTE
+#define VX_VLAN_TX_COLOR  VX_ORANGE_PALETTE
+#define VX_VLAN_TXD_COLOR VX_PURPLE_PALETTE
+
+#define VX_OUTPUT_RX_COLOR  VX_ORANGE_PALETTE
+#define VX_OUTPUT_RXD_COLOR VX_PURPLE_PALETTE
+#define VX_OUTPUT_TX_COLOR  VX_GREEN_PALETTE
+#define VX_OUTPUT_TXD_COLOR VX_RED_PALETTE
 
 // Static objects
 static const char png_data[655] = {
@@ -93,8 +108,7 @@ static lv_img_dsc_t png_image_dsc = {
 
 typedef enum {
 	VX_DISPLAY_BYTES,
-	VX_DISPLAY_PACKETS,
-	VX_DISPLAY_DROPPED
+	VX_DISPLAY_PACKETS
 } vx_display_mode;
 
 typedef struct Selector {

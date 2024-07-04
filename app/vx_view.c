@@ -75,7 +75,7 @@ int create_background() {
     return 0;
 }
 
-void interfaces_chart_change_visibility();
+int  interfaces_chart_change_visibility();
 /*
  * <-<input>-<input>-<output>-<output>->
  *      |       |
@@ -103,7 +103,7 @@ void* select_interface(void* args) {
 
         if (rd < (int) sizeof(struct input_event)) {
             perror("evtest: error reading");
-            return NULL;
+            exit(EXIT_FAILURE);
         }
 
         for (i = 0; i < rd / sizeof(struct input_event); i++) {
@@ -127,11 +127,13 @@ void* select_interface(void* args) {
                         interface = (interface->next ? interface->next : interface->parent->input_head);
                         break;
                     case VX_CLASS_VLAN:
+                        Interface_set_focus(vlan->parent, true, selector.display_mode);
                         interface = (vlan->parent->next ? vlan->parent->next : vlan->parent->parent->output_head);
                         break;
                     }
                     selector.selected = (void*)interface;
-                    interfaces_chart_change_visibility();
+                    if (interfaces_chart_change_visibility() < 0)
+                        exit(EXIT_FAILURE);
                     break;
                 case KEY_LEFT:
                     switch (interface->type) {
@@ -155,6 +157,7 @@ void* select_interface(void* args) {
                         }
                         break;
                     case VX_CLASS_VLAN:
+                        Interface_set_focus(vlan->parent, true, selector.display_mode);
                         if (vlan->parent->prev)
                             interface = vlan->parent->prev;
                         else {
@@ -165,7 +168,8 @@ void* select_interface(void* args) {
                         break;
                     }
                     selector.selected = (void*)interface;
-                    interfaces_chart_change_visibility();
+                    if (interfaces_chart_change_visibility() < 0)
+                        exit(EXIT_FAILURE);
                     break;
                 case KEY_UP:
                     if (vlan->type == VX_CLASS_VLAN) {
@@ -174,38 +178,37 @@ void* select_interface(void* args) {
                         } else {
                             selector.selected = (void*)vlan->parent;
                         }
-                        interfaces_chart_change_visibility();
+                        if (interfaces_chart_change_visibility() < 0)
+                            exit(EXIT_FAILURE);
                     }
                     break;
                 case KEY_DOWN:
                     if (vlan->type == VX_CLASS_VLAN) {
                         if (vlan->next) {
                             selector.selected = (void*)vlan->next;
-                            interfaces_chart_change_visibility();
+                            if (interfaces_chart_change_visibility() < 0)
+                                exit(EXIT_FAILURE);
                         }
                     } else if (interface->type == VX_CLASS_INPUT_INTERFACE) {
                         if (interface->vlan_stats) {
                             selector.selected = (void*)interface->vlan_stats;
-                            interfaces_chart_change_visibility();
+                            if (interfaces_chart_change_visibility() < 0)
+                                exit(EXIT_FAILURE);
                         }
                     }
                     break;
                 case KEY_B:
                     if (selector.display_mode != VX_DISPLAY_BYTES) {
                         selector.display_mode = VX_DISPLAY_BYTES;
-                        interfaces_chart_change_visibility();
+                        if (interfaces_chart_change_visibility() < 0)
+                            exit(EXIT_FAILURE);
                     }
                     break;
                 case KEY_P:
                     if (selector.display_mode != VX_DISPLAY_PACKETS) {
                         selector.display_mode = VX_DISPLAY_PACKETS;
-                        interfaces_chart_change_visibility();
-                    }
-                    break;
-                case KEY_D:
-                    if (selector.display_mode != VX_DISPLAY_DROPPED) {
-                        selector.display_mode = VX_DISPLAY_DROPPED;
-                        interfaces_chart_change_visibility();
+                        if (interfaces_chart_change_visibility() < 0)
+                            exit(EXIT_FAILURE);
                     }
                 }
                 pthread_mutex_unlock(&main_mutex);
@@ -217,10 +220,9 @@ void* select_interface(void* args) {
 
 
 void interfaces_refresh() {
-    Interface* iface = NULL;
+    Interface* iface = interface_collection->input_head;
     Vlan*      vlan  = NULL;
 
-    iface = interface_collection->input_head;
     while (iface) {
         vlan = iface->vlan_stats;
         while (vlan) {
@@ -233,14 +235,25 @@ void interfaces_refresh() {
     }
 }
 
-static int update_interface_label(lv_obj_t* label, uint64_t val, uint64_t diff, uint64_t count, uint64_t sma, int flag) {
+static int update_interface_label(lv_obj_t* label, Interface* iface, uint64_t val, vx_display flag) {
     char *str_sma, *str_val, *str_diff;
+    uint64_t sma = 0, diff = 0, count = 0;
     switch (flag) {
-    case -1:
-        lv_label_set_text(label, "No Tx for redirection");
+    case VX_NONE:
+        lv_label_set_text(label, "");
         return 0;
-    case RTNL_LINK_RX_BYTES:
-    case RTNL_LINK_TX_BYTES:
+    case VX_RX_BYTES: sma = iface->diff_sma.rx_bytes; diff = iface->diff.rx_bytes; count = iface->buffer.count; break;
+    case VX_TX_BYTES: sma = iface->diff_sma.tx_bytes; diff = iface->diff.tx_bytes; count = iface->buffer.count; break;
+    case VX_RX_DROPPED_BYTES:  sma = iface->diff_sma.rx_dropped_bytes; diff = iface->diff.rx_dropped_bytes; count = iface->buffer.count; break;
+    case VX_RX_PACKETS: sma = iface->diff_sma.rx_packets; diff = iface->diff.rx_packets; count = iface->buffer.count; break;
+    case VX_TX_PACKETS: sma = iface->diff_sma.tx_packets; diff = iface->diff.tx_packets; count = iface->buffer.count; break;
+    case VX_RX_DROPPED: sma = iface->diff_sma.rx_dropped; diff = iface->diff.rx_dropped; count = iface->buffer.count; break;
+    case VX_TX_DROPPED: sma = iface->diff_sma.tx_dropped; diff = iface->diff.tx_dropped; count = iface->buffer.count; break;
+    }
+    switch (flag) {
+    case VX_RX_BYTES:
+    case VX_TX_BYTES:
+    case VX_RX_DROPPED_BYTES:
         str_sma = calculate_size(sma);
         if (!str_sma) {
             perror("calculate_size malloc failed");
@@ -260,36 +273,67 @@ static int update_interface_label(lv_obj_t* label, uint64_t val, uint64_t diff, 
     }
     switch (flag) {
     // Bytes
-    case RTNL_LINK_RX_BYTES:
-        lv_label_set_text_fmt(label, "Total Rx: %s | Rx byte/s: %s/s | Rx byte/s (avg. last %lds) %s/s", str_val, str_diff, count, str_sma);
-        lv_obj_set_style_text_color(label, VX_GREEN_PALETTE, 0);
+    case VX_RX_BYTES:
+        lv_label_set_text_fmt(label, "Total Rx: %s | Rx byte/s: %s/s | Rx byte/s (avg. last %lds) %s/s", str_val, str_diff, count - 1, str_sma);
+        switch (iface->type) {
+        case VX_CLASS_INPUT_INTERFACE:  lv_obj_set_style_text_color(label, VX_INPUT_RX_COLOR, 0); break;
+        case VX_CLASS_OUTPUT_INTERFACE: lv_obj_set_style_text_color(label, VX_OUTPUT_RX_COLOR, 0); break;
+        case VX_CLASS_VLAN:             lv_obj_set_style_text_color(label, VX_VLAN_RX_COLOR, 0); break;
+        }
         break;
-    case RTNL_LINK_TX_BYTES:
-        lv_label_set_text_fmt(label, "Total Tx: %s | Tx byte/s: %s/s | Tx byte/s (avg. last %lds) %s/s", str_val, str_diff, count, str_sma);
-        lv_obj_set_style_text_color(label, VX_ORANGE_PALETTE, 0);
+    case VX_TX_BYTES:
+        lv_label_set_text_fmt(label, "Total Tx: %s | Tx byte/s: %s/s | Tx byte/s (avg. last %lds) %s/s", str_val, str_diff, count - 1, str_sma);
+        switch (iface->type) {
+        case VX_CLASS_INPUT_INTERFACE:  lv_obj_set_style_text_color(label, VX_INPUT_TX_COLOR, 0); break;
+        case VX_CLASS_OUTPUT_INTERFACE: lv_obj_set_style_text_color(label, VX_OUTPUT_TX_COLOR, 0); break;
+        case VX_CLASS_VLAN:             lv_obj_set_style_text_color(label, VX_VLAN_TX_COLOR, 0); break;
+        }
+        break;
+    case VX_RX_DROPPED_BYTES:
+        lv_label_set_text_fmt(label, "Dropped Rx: %s | Rx byte/s: %s/s | Rx byte/s (avg. last %lds) %s/s", str_val, str_diff, count - 1, str_sma);
+        switch (iface->type) {
+        case VX_CLASS_INPUT_INTERFACE:  lv_obj_set_style_text_color(label, VX_INPUT_RXD_COLOR, 0); break;
+        case VX_CLASS_OUTPUT_INTERFACE: lv_obj_set_style_text_color(label, VX_OUTPUT_RXD_COLOR, 0); break;
+        case VX_CLASS_VLAN:             lv_obj_set_style_text_color(label, VX_VLAN_RXD_COLOR, 0); break;
+        }
         break;
     // Packets
-    case RTNL_LINK_RX_PACKETS:
-        lv_label_set_text_fmt(label, "Total Rx pkt: %"PRIu64" | Rx pkt/s: %"PRIu64"/s | Rx pkt/s (avg. last %lds) %"PRIu64"/s", val, diff, count, sma);
-        lv_obj_set_style_text_color(label, VX_GREEN_PALETTE, 0);
+    case VX_RX_PACKETS:
+        lv_label_set_text_fmt(label, "Total Rx pkt: %"PRIu64" | Rx pkt/s: %"PRIu64"/s | Rx pkt/s (avg. last %lds) %"PRIu64"/s", val, diff, count - 1, sma);
+        switch (iface->type) {
+        case VX_CLASS_INPUT_INTERFACE:  lv_obj_set_style_text_color(label, VX_INPUT_RX_COLOR, 0); break;
+        case VX_CLASS_OUTPUT_INTERFACE: lv_obj_set_style_text_color(label, VX_OUTPUT_RX_COLOR, 0); break;
+        case VX_CLASS_VLAN:             lv_obj_set_style_text_color(label, VX_VLAN_RX_COLOR, 0); break;
+        }
         break;
-    case RTNL_LINK_TX_PACKETS:
-        lv_label_set_text_fmt(label, "Total Tx pkt: %"PRIu64" | Tx pkt/s: %"PRIu64"/s | Tx pkt/s (avg. last %lds) %"PRIu64"/s", val, diff, count, sma);
-        lv_obj_set_style_text_color(label, VX_ORANGE_PALETTE, 0);
+    case VX_TX_PACKETS:
+        lv_label_set_text_fmt(label, "Total Tx pkt: %"PRIu64" | Tx pkt/s: %"PRIu64"/s | Tx pkt/s (avg. last %lds) %"PRIu64"/s", val, diff, count - 1, sma);
+        switch (iface->type) {
+        case VX_CLASS_INPUT_INTERFACE:  lv_obj_set_style_text_color(label, VX_INPUT_TX_COLOR, 0); break;
+        case VX_CLASS_OUTPUT_INTERFACE: lv_obj_set_style_text_color(label, VX_OUTPUT_TX_COLOR, 0); break;
+        case VX_CLASS_VLAN:             lv_obj_set_style_text_color(label, VX_VLAN_TX_COLOR, 0); break;
+        }
         break;
-    // Dropped
-    case RTNL_LINK_RX_DROPPED:
-        lv_label_set_text_fmt(label, "Total Rx drop: %"PRIu64" | Rx drop/s: %"PRIu64"/s | Rx drop/s (avg. last %lds) %"PRIu64"/s", val, diff, count, sma);
-        lv_obj_set_style_text_color(label, VX_ORANGE_PALETTE, 0);
+    case VX_RX_DROPPED:
+        lv_label_set_text_fmt(label, "Total Rx drop: %"PRIu64" | Rx drop/s: %"PRIu64"/s | Rx drop/s (avg. last %lds) %"PRIu64"/s", val, diff, count - 1, sma);
+        switch (iface->type) {
+        case VX_CLASS_INPUT_INTERFACE:  lv_obj_set_style_text_color(label, VX_INPUT_RXD_COLOR, 0); break;
+        case VX_CLASS_OUTPUT_INTERFACE: lv_obj_set_style_text_color(label, VX_OUTPUT_RXD_COLOR, 0); break;
+        case VX_CLASS_VLAN:             lv_obj_set_style_text_color(label, VX_VLAN_RXD_COLOR, 0); break;
+        }
         break;
-    case RTNL_LINK_TX_DROPPED:
-        lv_label_set_text_fmt(label, "Total Tx drop: %"PRIu64" | Tx drop/s: %"PRIu64"/s | Tx drop/s (avg. last %lds) %"PRIu64"/s", val, diff, count, sma);
-        lv_obj_set_style_text_color(label, VX_RED_PALETTE, 0);
+    case VX_TX_DROPPED:
+        lv_label_set_text_fmt(label, "Total Tx drop: %"PRIu64" | Tx drop/s: %"PRIu64"/s | Tx drop/s (avg. last %lds) %"PRIu64"/s", val, diff, count - 1, sma);
+        switch (iface->type) {
+        case VX_CLASS_INPUT_INTERFACE:  lv_obj_set_style_text_color(label, VX_INPUT_TXD_COLOR, 0); break;
+        case VX_CLASS_OUTPUT_INTERFACE: lv_obj_set_style_text_color(label, VX_OUTPUT_TXD_COLOR, 0); break;
+        case VX_CLASS_VLAN:             lv_obj_set_style_text_color(label, VX_VLAN_TXD_COLOR, 0); break;
+        }
         break;
     }
     switch (flag) {
-    case RTNL_LINK_RX_BYTES:
-    case RTNL_LINK_TX_BYTES:
+    case VX_RX_BYTES:
+    case VX_TX_BYTES:
         free(str_sma);
         free(str_val);
         free(str_diff);
@@ -298,173 +342,209 @@ static int update_interface_label(lv_obj_t* label, uint64_t val, uint64_t diff, 
     return 0;
 }
 
+int interface_series_update(Interface* iface, int type) {
+    int curr_i = (iface->buffer.head + VX_NETWORK_CHART_SIZE) % (VX_NETWORK_CHART_SIZE + 1),
+        prev_i = (iface->buffer.head + VX_NETWORK_CHART_SIZE - 1) % (VX_NETWORK_CHART_SIZE + 1);
+    InterfaceStats *curr = &iface->buffer.data[curr_i],
+                   *prev = &iface->buffer.data[prev_i],
+                   *vcurr = NULL,
+                   *vprev = NULL;
+
+    uint64_t max = 0;
+    int* scale;
+
+    // Interfaces
+    lv_chart_series_t *r_series,  *t_series,  *rd_series,  *td_series;
+    switch (type) {
+    case VX_DISPLAY_BYTES:
+        max = (iface->diff_max.rx_bytes > iface->diff_max.tx_bytes ?
+            iface->diff_max.rx_bytes : iface->diff_max.tx_bytes
+        );
+        scale = &iface->bytes_scale;
+        r_series  = iface->rx_bytes;
+        t_series  = iface->tx_bytes;
+        rd_series = NULL;
+        td_series = NULL;
+        break;
+    case VX_DISPLAY_PACKETS:
+        max = (iface->diff_max.rx_packets > iface->diff_max.tx_packets ?
+            iface->diff_max.rx_packets > iface->diff_max.rx_dropped ?
+                iface->diff_max.rx_packets : iface->diff_max.rx_dropped
+        :   iface->diff_max.tx_packets > iface->diff_max.rx_dropped ?
+                iface->diff_max.tx_packets : iface->diff_max.rx_dropped
+        );
+        scale = &iface->packets_scale;
+        r_series  = iface->rx_packets;
+        t_series  = iface->tx_packets;
+        rd_series = iface->rx_dropped;
+        td_series = iface->tx_dropped;
+        break;
+    }
+
+    int shift_amount = highest_set_bit_position(max) - VX_NETWORK_CHART_RANGE_SHIFT_MAX + 1;
+    if (shift_amount < 0)
+        shift_amount = 0;
+
+    // Scale changed, reset all series for interface
+    if (shift_amount != *scale) {
+        lv_chart_set_all_value(interface_collection->network_chart, r_series, LV_CHART_POINT_NONE);
+        lv_chart_set_all_value(interface_collection->network_chart, t_series, LV_CHART_POINT_NONE);
+
+        int start = (iface->buffer.head + VX_NETWORK_CHART_SIZE + 1 - iface->buffer.count) % (VX_NETWORK_CHART_SIZE + 1);
+        for (int i = 0; i < (iface->buffer.count - 1); i++) {
+            InterfaceStats *curr = &iface->buffer.data[(start + i + 1) % (VX_NETWORK_CHART_SIZE + 1)],
+                           *prev = &iface->buffer.data[(start + i) % (VX_NETWORK_CHART_SIZE + 1)];
+
+            uint64_t r_diff;
+            uint64_t t_diff;
+            switch (type) {
+            case VX_DISPLAY_BYTES:
+                r_diff = curr->rx_bytes - prev->rx_bytes;
+                t_diff = curr->tx_bytes - prev->tx_bytes;
+                lv_chart_set_next_value(interface_collection->network_chart, r_series,  (r_diff >> shift_amount));
+                lv_chart_set_next_value(interface_collection->network_chart, t_series, -(t_diff >> shift_amount));
+                break;
+            case VX_DISPLAY_PACKETS:
+                r_diff = curr->rx_packets - prev->rx_packets;
+                t_diff = curr->tx_packets - prev->tx_packets;
+                lv_chart_set_next_value(interface_collection->network_chart, r_series,  (r_diff >> shift_amount));
+                lv_chart_set_next_value(interface_collection->network_chart, t_series, -(t_diff >> shift_amount));
+                r_diff = curr->rx_dropped - prev->rx_dropped;
+                t_diff = curr->tx_dropped - prev->tx_dropped;
+                lv_chart_set_next_value(interface_collection->network_chart, rd_series,  (r_diff >> shift_amount));
+                lv_chart_set_next_value(interface_collection->network_chart, td_series, -(t_diff >> shift_amount));
+                break;
+            }
+        }
+
+        *scale = shift_amount;
+    // Same shift, simple insert
+    } else {
+        switch (type) {
+        case VX_DISPLAY_BYTES:
+            lv_chart_set_next_value(interface_collection->network_chart, r_series,  (iface->diff.rx_bytes >> shift_amount));
+            lv_chart_set_next_value(interface_collection->network_chart, t_series, -(iface->diff.tx_bytes >> shift_amount));
+            break;
+        case VX_DISPLAY_PACKETS:
+            lv_chart_set_next_value(interface_collection->network_chart, r_series,  (iface->diff.rx_packets >> shift_amount));
+            lv_chart_set_next_value(interface_collection->network_chart, t_series, -(iface->diff.tx_packets >> shift_amount));
+            lv_chart_set_next_value(interface_collection->network_chart, rd_series,  (iface->diff.rx_dropped >> shift_amount));
+            lv_chart_set_next_value(interface_collection->network_chart, td_series, -(iface->diff.tx_dropped >> shift_amount));
+            break;
+        }
+    }
+
+    // Vlans
+    for (Vlan* vlan = iface->vlan_stats; vlan != NULL; vlan = vlan->next) {
+        lv_chart_series_t *vr_series, *vrd_series;
+        switch (type) {
+        case VX_DISPLAY_BYTES:
+            max = (vlan->diff_max.rx_bytes > vlan->diff_max.rx_dropped_bytes ?
+                vlan->diff_max.rx_bytes : vlan->diff_max.rx_dropped_bytes
+            );
+            scale = &vlan->bytes_scale; 
+            vr_series  = vlan->rx_bytes;
+            vrd_series = vlan->rx_dropped_bytes;
+            break;
+        case VX_DISPLAY_PACKETS:
+            max = (vlan->diff_max.rx_packets > vlan->diff_max.rx_dropped ?
+                vlan->diff_max.rx_packets : vlan->diff_max.rx_dropped
+            );
+            scale = &vlan->packets_scale; 
+            vr_series  = vlan->rx_packets;
+            vrd_series = vlan->rx_dropped;
+            break;
+        }
+
+        int shift_amount = highest_set_bit_position(max) - VX_NETWORK_CHART_RANGE_SHIFT_MAX + 1;
+        if (shift_amount < 0)
+            shift_amount = 0;
+
+        // Scale changed, reset all series for interface
+        if (shift_amount != *scale) {
+            lv_chart_set_all_value(interface_collection->network_chart, vr_series, LV_CHART_POINT_NONE);
+            lv_chart_set_all_value(interface_collection->network_chart, vrd_series, LV_CHART_POINT_NONE);
+
+            int start = (vlan->buffer.head + VX_NETWORK_CHART_SIZE + 1 - vlan->buffer.count) % (VX_NETWORK_CHART_SIZE + 1);
+            int vcurr_i = (iface->buffer.head + VX_NETWORK_CHART_SIZE) % (VX_NETWORK_CHART_SIZE + 1),
+                vprev_i = (iface->buffer.head + VX_NETWORK_CHART_SIZE - 1) % (VX_NETWORK_CHART_SIZE + 1);
+            for (int i = 0; i < (vlan->buffer.count - 1); i++) {
+                vcurr = &vlan->buffer.data[(start + i + 1) % (VX_NETWORK_CHART_SIZE + 1)];
+                vprev = &vlan->buffer.data[(start + i) % (VX_NETWORK_CHART_SIZE + 1)];
+                uint64_t vr_diff;
+                switch (type) {
+                case VX_DISPLAY_BYTES:
+                    vr_diff = vcurr->rx_bytes - vprev->rx_bytes;
+                    lv_chart_set_next_value(interface_collection->network_chart, vr_series, (vr_diff >> shift_amount));
+                    vr_diff = vcurr->rx_dropped_bytes - vprev->rx_dropped_bytes;
+                    lv_chart_set_next_value(interface_collection->network_chart, vrd_series, (vr_diff >> shift_amount));
+                    break;
+                case VX_DISPLAY_PACKETS:
+                    vr_diff = vcurr->rx_packets - vprev->rx_packets;
+                    lv_chart_set_next_value(interface_collection->network_chart, vr_series, (vr_diff >> shift_amount));
+                    vr_diff = vcurr->rx_dropped - vprev->rx_dropped;
+                    lv_chart_set_next_value(interface_collection->network_chart, vrd_series, (vr_diff >> shift_amount));
+                    break;
+                }
+            }
+        } else {
+            switch (type) {
+            case VX_DISPLAY_BYTES:
+                lv_chart_set_next_value(interface_collection->network_chart, vr_series, (vlan->diff.rx_bytes >> shift_amount));
+                lv_chart_set_next_value(interface_collection->network_chart, vrd_series, (vlan->diff.rx_dropped_bytes >> shift_amount));
+                break;
+            case VX_DISPLAY_PACKETS:
+                lv_chart_set_next_value(interface_collection->network_chart, vr_series, (vlan->diff.rx_packets >> shift_amount));
+                lv_chart_set_next_value(interface_collection->network_chart, vrd_series, (vlan->diff.rx_dropped >> shift_amount));
+                break;
+            }
+        }
+    }
+    return curr_i;
+}
+
 int interfaces_chart_update() {
     if (collect_interfaces_data(interface_collection) < 0)
         return -1;
 
     // Input
+    int curr_i = 0;
     for (Interface* iface = interface_collection->input_head; iface != NULL; iface = iface->next) {
-        int curr_i = (iface->buffer.head + VX_NETWORK_CHART_SIZE) % (VX_NETWORK_CHART_SIZE + 1),
-            prev_i = (iface->buffer.head + VX_NETWORK_CHART_SIZE - 1) % (VX_NETWORK_CHART_SIZE + 1);
-        InterfaceStats *curr = &iface->buffer.data[curr_i],
-                       *prev = &iface->buffer.data[prev_i],
-                       *vcurr = NULL,
-                       *vprev = NULL;
-        // Bytes series
-        uint64_t rx_diff = curr->rx_bytes - prev->rx_bytes;
-        uint64_t tx_diff = curr->tx_bytes - prev->tx_bytes;
-        uint64_t bytes_diff_max = (iface->diff_max.rx_bytes > iface->diff_max.tx_bytes ?
-            iface->diff_max.rx_bytes :
-            iface->diff_max.tx_bytes
-        );
-
-        uint64_t rxv_diff;
-
-        int shift_amount = highest_set_bit_position(bytes_diff_max) - VX_NETWORK_CHART_RANGE_SHIFT_MAX + 1;
-        if (shift_amount < 0)
-            shift_amount = 0;
-
-        // Scale changed, reset all series for interface
-        if (shift_amount != iface->bytes_scale) {
-            lv_chart_set_all_value(interface_collection->network_chart, iface->rx_bytes, LV_CHART_POINT_NONE);
-            lv_chart_set_all_value(interface_collection->network_chart, iface->tx_bytes, LV_CHART_POINT_NONE);
-
-            int start = (iface->buffer.head + VX_NETWORK_CHART_SIZE + 1 - iface->buffer.count) % (VX_NETWORK_CHART_SIZE + 1);
-            for (int i = 0; i < (iface->buffer.count - 1); i++) {
-                InterfaceStats *curr = &iface->buffer.data[(start + i + 1) % (VX_NETWORK_CHART_SIZE + 1)],
-                               *prev = &iface->buffer.data[(start + i) % (VX_NETWORK_CHART_SIZE + 1)];
-                uint64_t rx_diff = curr->rx_bytes - prev->rx_bytes;
-                uint64_t tx_diff = curr->tx_bytes - prev->tx_bytes;
-
-                lv_chart_set_next_value(interface_collection->network_chart, iface->rx_bytes,  (rx_diff >> shift_amount));
-                lv_chart_set_next_value(interface_collection->network_chart, iface->tx_bytes, -(tx_diff >> shift_amount));
-            }
-
-            // Vlans bytes/packets are always <= Interface ones
-            for (Vlan* vlan = iface->vlan_stats; vlan != NULL; vlan = vlan->next) {
-                lv_chart_set_all_value(interface_collection->network_chart, vlan->rx_bytes, LV_CHART_POINT_NONE);
-
-                int start = (vlan->buffer.head + VX_NETWORK_CHART_SIZE + 1 - vlan->buffer.count) % (VX_NETWORK_CHART_SIZE + 1);
-                for (int i = 0; i < (vlan->buffer.count - 1); i++) {
-                    vcurr = &vlan->buffer.data[(start + i + 1) % (VX_NETWORK_CHART_SIZE + 1)];
-                    vprev = &vlan->buffer.data[(start + i) % (VX_NETWORK_CHART_SIZE + 1)];
-                    rxv_diff = vcurr->rx_bytes - vprev->rx_bytes;
-                    lv_chart_set_next_value(interface_collection->network_chart, vlan->rx_bytes,  (rxv_diff >> shift_amount));
-                }
-            }
-            iface->bytes_scale = shift_amount;
-        // Same shift, simple insert
-        } else {
-            lv_chart_set_next_value(interface_collection->network_chart, iface->rx_bytes,  (rx_diff >> shift_amount));
-            lv_chart_set_next_value(interface_collection->network_chart, iface->tx_bytes, -(tx_diff >> shift_amount));
-
-            for (Vlan* vlan = iface->vlan_stats; vlan != NULL; vlan = vlan->next) {
-                int vcurr_i = (vlan->buffer.head + VX_NETWORK_CHART_SIZE) % (VX_NETWORK_CHART_SIZE + 1),
-                    vprev_i = (vlan->buffer.head + VX_NETWORK_CHART_SIZE - 1) % (VX_NETWORK_CHART_SIZE + 1);
-                vcurr = &vlan->buffer.data[vcurr_i];
-                vprev = &vlan->buffer.data[vprev_i];
-                rxv_diff = vcurr->rx_bytes - vprev->rx_bytes;
-                lv_chart_set_next_value(interface_collection->network_chart, vlan->rx_bytes,  (rxv_diff >> shift_amount));
-            }
-        }
-
-        // Packets/dropped series
-        uint64_t rxp_diff = curr->rx_packets - prev->rx_packets;
-        uint64_t rxd_diff = curr->rx_dropped - prev->rx_dropped;
-        uint64_t txp_diff = curr->tx_packets - prev->tx_packets;
-        uint64_t txd_diff = curr->tx_dropped - prev->tx_dropped;
-        uint64_t xxp_max = (iface->diff_max.rx_packets > iface->diff_max.tx_packets ? iface->diff_max.rx_packets : iface->diff_max.tx_packets);
-        uint64_t xxd_max = (iface->diff_max.rx_dropped > iface->diff_max.tx_dropped ? iface->diff_max.rx_dropped : iface->diff_max.tx_dropped);
-        uint64_t packets_diff_max = (xxd_max > xxp_max ? xxd_max : xxp_max);
-
-        shift_amount = highest_set_bit_position(packets_diff_max) - VX_NETWORK_CHART_RANGE_SHIFT_MAX + 1;
-        if (shift_amount < 0)
-            shift_amount = 0;
-        if (shift_amount != iface->packets_scale) {
-            lv_chart_set_all_value(interface_collection->network_chart, iface->rx_packets, LV_CHART_POINT_NONE);
-            lv_chart_set_all_value(interface_collection->network_chart, iface->rx_dropped, LV_CHART_POINT_NONE);
-            lv_chart_set_all_value(interface_collection->network_chart, iface->tx_packets, LV_CHART_POINT_NONE);
-            lv_chart_set_all_value(interface_collection->network_chart, iface->tx_dropped, LV_CHART_POINT_NONE);
-
-            int start = (iface->buffer.head + VX_NETWORK_CHART_SIZE + 1 - iface->buffer.count) % (VX_NETWORK_CHART_SIZE + 1);
-            for (int i = 0; i < (iface->buffer.count - 1); i++) {
-                InterfaceStats *curr = &iface->buffer.data[(start + i + 1) % (VX_NETWORK_CHART_SIZE + 1)],
-                               *prev = &iface->buffer.data[(start + i) % (VX_NETWORK_CHART_SIZE + 1)];
-                uint64_t rxp_diff = curr->rx_packets - prev->rx_packets;
-                uint64_t rxd_diff = curr->rx_dropped - prev->rx_dropped;
-                uint64_t txp_diff = curr->tx_packets - prev->tx_packets;
-                uint64_t txd_diff = curr->tx_dropped - prev->tx_dropped;
-
-                lv_chart_set_next_value(interface_collection->network_chart, iface->rx_packets,  (rxp_diff >> shift_amount));
-                lv_chart_set_next_value(interface_collection->network_chart, iface->rx_dropped,  (rxd_diff >> shift_amount));
-                lv_chart_set_next_value(interface_collection->network_chart, iface->tx_packets, -(txp_diff >> shift_amount));
-                lv_chart_set_next_value(interface_collection->network_chart, iface->tx_dropped, -(txd_diff >> shift_amount));
-            }
-            // Vlans bytes/packets are always <= Interface ones
-            for (Vlan* vlan = iface->vlan_stats; vlan != NULL; vlan = vlan->next) {
-                lv_chart_set_all_value(interface_collection->network_chart, vlan->rx_packets, LV_CHART_POINT_NONE);
-                lv_chart_set_all_value(interface_collection->network_chart, vlan->rx_dropped, LV_CHART_POINT_NONE);
-
-                int start = (vlan->buffer.head + VX_NETWORK_CHART_SIZE + 1 - vlan->buffer.count) % (VX_NETWORK_CHART_SIZE + 1);
-                for (int i = 0; i < (vlan->buffer.count - 1); i++) {
-                    InterfaceStats *curr = &vlan->buffer.data[(start + i + 1) % (VX_NETWORK_CHART_SIZE + 1)],
-                                   *prev = &vlan->buffer.data[(start + i) % (VX_NETWORK_CHART_SIZE + 1)];
-                    rxp_diff = curr->rx_packets - prev->rx_packets;
-                    rxd_diff = curr->rx_dropped - prev->rx_dropped;
-                    lv_chart_set_next_value(interface_collection->network_chart, vlan->rx_packets, (rxp_diff >> shift_amount));
-                    lv_chart_set_next_value(interface_collection->network_chart, vlan->rx_dropped, (rxd_diff >> shift_amount));
-                }
-            }
-            iface->packets_scale = shift_amount;
-        // Same shift, simple insert
-        } else {
-            lv_chart_set_next_value(interface_collection->network_chart, iface->rx_packets,  (rxp_diff >> shift_amount));
-            lv_chart_set_next_value(interface_collection->network_chart, iface->rx_dropped,  (rxd_diff >> shift_amount));
-            lv_chart_set_next_value(interface_collection->network_chart, iface->tx_packets, -(txp_diff >> shift_amount));
-            lv_chart_set_next_value(interface_collection->network_chart, iface->tx_dropped, -(txd_diff >> shift_amount));
-
-            for (Vlan* vlan = iface->vlan_stats; vlan != NULL; vlan = vlan->next) {
-                InterfaceStats *curr = &vlan->buffer.data[vlan->buffer.head + 1],
-                               *prev = &vlan->buffer.data[vlan->buffer.head];
-                rxp_diff = curr->rx_packets - prev->rx_packets;
-                rxd_diff = curr->rx_dropped - prev->rx_dropped;
-                lv_chart_set_next_value(interface_collection->network_chart, vlan->rx_packets, (rxp_diff >> shift_amount));
-                lv_chart_set_next_value(interface_collection->network_chart, vlan->rx_dropped, (rxd_diff >> shift_amount));
-            }
-        }
+        interface_series_update(iface, VX_DISPLAY_BYTES);
+        curr_i = interface_series_update(iface, VX_DISPLAY_PACKETS);
+        InterfaceStats *curr = &iface->buffer.data[curr_i];
 
         // Labels
         if (selector.selected == iface) {
             switch (selector.display_mode) {
-
             case VX_DISPLAY_BYTES:
-                update_interface_label(interface_collection->network_rx_label, curr->rx_bytes, rx_diff, iface->buffer.count - 1, iface->diff_sma.rx_bytes, RTNL_LINK_RX_BYTES);
-                update_interface_label(interface_collection->network_tx_label, curr->tx_bytes, tx_diff, iface->buffer.count - 1, iface->diff_sma.tx_bytes, RTNL_LINK_TX_BYTES);
+                update_interface_label(interface_collection->network_rx_label, iface, curr->rx_bytes, VX_RX_BYTES);
+                update_interface_label(interface_collection->network_tx_label, iface, curr->tx_bytes, VX_TX_BYTES);
+                update_interface_label(interface_collection->network_rxd_label, iface, 0, VX_NONE);
+                update_interface_label(interface_collection->network_txd_label, iface, 0, VX_NONE);
                 break;
             case VX_DISPLAY_PACKETS:
-                update_interface_label(interface_collection->network_rx_label, curr->rx_packets, rxp_diff, iface->buffer.count - 1, iface->diff_sma.rx_packets, RTNL_LINK_RX_PACKETS);
-                update_interface_label(interface_collection->network_tx_label, curr->tx_packets, txp_diff, iface->buffer.count - 1, iface->diff_sma.tx_packets, RTNL_LINK_TX_PACKETS);
-                break;
-            case VX_DISPLAY_DROPPED:
-                update_interface_label(interface_collection->network_rx_label, curr->rx_dropped, rxd_diff, iface->buffer.count - 1, iface->diff_sma.rx_dropped, RTNL_LINK_RX_DROPPED);
-                update_interface_label(interface_collection->network_tx_label, curr->tx_dropped, txd_diff, iface->buffer.count - 1, iface->diff_sma.tx_dropped, RTNL_LINK_TX_DROPPED);
+                update_interface_label(interface_collection->network_rx_label, iface, curr->rx_packets, VX_RX_PACKETS);
+                update_interface_label(interface_collection->network_tx_label, iface, curr->tx_packets, VX_TX_PACKETS);
+                update_interface_label(interface_collection->network_rxd_label, iface, curr->rx_dropped, VX_RX_DROPPED);
+                update_interface_label(interface_collection->network_txd_label, iface, curr->tx_dropped, VX_TX_DROPPED);
             }
         } else {
             for (Vlan* vlan = iface->vlan_stats; vlan != NULL; vlan = vlan->next) {
+                int curr_i = (vlan->buffer.head + VX_NETWORK_CHART_SIZE) % (VX_NETWORK_CHART_SIZE + 1);
                 if (selector.selected == vlan) {
                     switch (selector.display_mode) {
-
                     case VX_DISPLAY_BYTES:
-                        update_interface_label(interface_collection->network_rx_label, vlan->buffer.data[curr_i].rx_bytes, rx_diff, vlan->buffer.count - 1, vlan->diff_sma.rx_bytes, RTNL_LINK_RX_BYTES);
-                        update_interface_label(interface_collection->network_tx_label, vlan->buffer.data[curr_i].tx_bytes, 0, 0, 0, -1);
+                        update_interface_label(interface_collection->network_rx_label, (Interface*)vlan, vlan->buffer.data[curr_i].rx_bytes, VX_RX_BYTES);
+                        update_interface_label(interface_collection->network_tx_label, (Interface*)vlan, 0, VX_NONE);
+                        update_interface_label(interface_collection->network_rxd_label, (Interface*)vlan, vlan->buffer.data[curr_i].rx_dropped_bytes, VX_RX_DROPPED_BYTES);
+                        update_interface_label(interface_collection->network_txd_label, (Interface*)vlan, 0, VX_NONE);
                         break;
                     case VX_DISPLAY_PACKETS:
-                        update_interface_label(interface_collection->network_rx_label, vlan->buffer.data[curr_i].rx_packets, rxp_diff, vlan->buffer.count - 1, vlan->diff_sma.rx_packets, RTNL_LINK_RX_PACKETS);
-                        update_interface_label(interface_collection->network_tx_label, vlan->buffer.data[curr_i].tx_packets, 0, 0, 0, -1);
-                        break;
-                    case VX_DISPLAY_DROPPED:
-                        update_interface_label(interface_collection->network_rx_label, vlan->buffer.data[curr_i].rx_dropped, rxd_diff, vlan->buffer.count - 1, vlan->diff_sma.rx_dropped, RTNL_LINK_RX_DROPPED);
-                        update_interface_label(interface_collection->network_tx_label, vlan->buffer.data[curr_i].tx_dropped, 0, 0, 0, -1);
+                        update_interface_label(interface_collection->network_rx_label, (Interface*)vlan, vlan->buffer.data[curr_i].rx_packets, VX_RX_PACKETS);
+                        update_interface_label(interface_collection->network_tx_label, (Interface*)vlan, 0, VX_NONE);
+                        update_interface_label(interface_collection->network_rxd_label, (Interface*)vlan, vlan->buffer.data[curr_i].rx_dropped, VX_RX_DROPPED);
+                        update_interface_label(interface_collection->network_txd_label, (Interface*)vlan, 0, VX_NONE);
                     }
                 }
             }
@@ -473,125 +553,48 @@ int interfaces_chart_update() {
 
     // Output
     for (Interface* iface = interface_collection->output_head; iface != NULL; iface = iface->next) {
-        int curr_i = (iface->buffer.head + VX_NETWORK_CHART_SIZE) % (VX_NETWORK_CHART_SIZE + 1),
-            prev_i = (iface->buffer.head + VX_NETWORK_CHART_SIZE - 1) % (VX_NETWORK_CHART_SIZE + 1);
-        InterfaceStats *curr = &iface->buffer.data[curr_i],
-                       *prev = &iface->buffer.data[prev_i],
-                       *vcurr = NULL,
-                       *vprev = NULL;
-        // Bytes series
-        uint64_t rx_diff = curr->rx_bytes - prev->rx_bytes;
-        uint64_t tx_diff = curr->tx_bytes - prev->tx_bytes;
-        uint64_t bytes_diff_max = (iface->diff_max.rx_bytes > iface->diff_max.tx_bytes ?
-            iface->diff_max.rx_bytes :
-            iface->diff_max.tx_bytes
-        );
-
-        uint64_t rxv_diff;
-
-        int shift_amount = highest_set_bit_position(bytes_diff_max) - VX_NETWORK_CHART_RANGE_SHIFT_MAX + 1;
-        if (shift_amount < 0)
-            shift_amount = 0;
-
-        // Scale changed, reset all series for interface
-        if (shift_amount != iface->bytes_scale) {
-            lv_chart_set_all_value(interface_collection->network_chart, iface->rx_bytes, LV_CHART_POINT_NONE);
-            lv_chart_set_all_value(interface_collection->network_chart, iface->tx_bytes, LV_CHART_POINT_NONE);
-
-            int start = (iface->buffer.head + VX_NETWORK_CHART_SIZE + 1 - iface->buffer.count) % (VX_NETWORK_CHART_SIZE + 1);
-            for (int i = 0; i < (iface->buffer.count - 1); i++) {
-                InterfaceStats *curr = &iface->buffer.data[(start + i + 1) % (VX_NETWORK_CHART_SIZE + 1)],
-                               *prev = &iface->buffer.data[(start + i) % (VX_NETWORK_CHART_SIZE + 1)];
-                uint64_t rx_diff = curr->rx_bytes - prev->rx_bytes;
-                uint64_t tx_diff = curr->tx_bytes - prev->tx_bytes;
-
-                lv_chart_set_next_value(interface_collection->network_chart, iface->rx_bytes,  (rx_diff >> shift_amount));
-                lv_chart_set_next_value(interface_collection->network_chart, iface->tx_bytes, -(tx_diff >> shift_amount));
-            }
-            iface->bytes_scale = shift_amount;
-        // Same shift, simple insert
-        } else {
-            lv_chart_set_next_value(interface_collection->network_chart, iface->rx_bytes,  (rx_diff >> shift_amount));
-            lv_chart_set_next_value(interface_collection->network_chart, iface->tx_bytes, -(tx_diff >> shift_amount));
-        }
-
-        // Packets/dropped series
-        uint64_t rxp_diff = curr->rx_packets - prev->rx_packets;
-        uint64_t rxd_diff = curr->rx_dropped - prev->rx_dropped;
-        uint64_t txp_diff = curr->tx_packets - prev->tx_packets;
-        uint64_t txd_diff = curr->tx_dropped - prev->tx_dropped;
-        uint64_t xxp_max = (iface->diff_max.rx_packets > iface->diff_max.tx_packets ? iface->diff_max.rx_packets : iface->diff_max.tx_packets);
-        uint64_t xxd_max = (iface->diff_max.rx_dropped > iface->diff_max.tx_dropped ? iface->diff_max.rx_dropped : iface->diff_max.tx_dropped);
-        uint64_t packets_diff_max = (xxd_max > xxp_max ? xxd_max : xxp_max);
-
-        shift_amount = highest_set_bit_position(packets_diff_max) - VX_NETWORK_CHART_RANGE_SHIFT_MAX + 1;
-        if (shift_amount < 0)
-            shift_amount = 0;
-        if (shift_amount != iface->packets_scale) {
-            lv_chart_set_all_value(interface_collection->network_chart, iface->rx_packets, LV_CHART_POINT_NONE);
-            lv_chart_set_all_value(interface_collection->network_chart, iface->rx_dropped, LV_CHART_POINT_NONE);
-            lv_chart_set_all_value(interface_collection->network_chart, iface->tx_packets, LV_CHART_POINT_NONE);
-            lv_chart_set_all_value(interface_collection->network_chart, iface->tx_dropped, LV_CHART_POINT_NONE);
-
-            int start = (iface->buffer.head + VX_NETWORK_CHART_SIZE + 1 - iface->buffer.count) % (VX_NETWORK_CHART_SIZE + 1);
-            for (int i = 0; i < (iface->buffer.count - 1); i++) {
-                InterfaceStats *curr = &iface->buffer.data[(start + i + 1) % (VX_NETWORK_CHART_SIZE + 1)],
-                               *prev = &iface->buffer.data[(start + i) % (VX_NETWORK_CHART_SIZE + 1)];
-                uint64_t rxp_diff = curr->rx_packets - prev->rx_packets;
-                uint64_t rxd_diff = curr->rx_dropped - prev->rx_dropped;
-                uint64_t txp_diff = curr->tx_packets - prev->tx_packets;
-                uint64_t txd_diff = curr->tx_dropped - prev->tx_dropped;
-
-                lv_chart_set_next_value(interface_collection->network_chart, iface->rx_packets,  (rxp_diff >> shift_amount));
-                lv_chart_set_next_value(interface_collection->network_chart, iface->rx_dropped,  (rxd_diff >> shift_amount));
-                lv_chart_set_next_value(interface_collection->network_chart, iface->tx_packets, -(txp_diff >> shift_amount));
-                lv_chart_set_next_value(interface_collection->network_chart, iface->tx_dropped, -(txd_diff >> shift_amount));
-            }
-            iface->packets_scale = shift_amount;
-        // Same shift, simple insert
-        } else {
-            lv_chart_set_next_value(interface_collection->network_chart, iface->rx_packets,  (rxp_diff >> shift_amount));
-            lv_chart_set_next_value(interface_collection->network_chart, iface->rx_dropped,  (rxd_diff >> shift_amount));
-            lv_chart_set_next_value(interface_collection->network_chart, iface->tx_packets, -(txp_diff >> shift_amount));
-            lv_chart_set_next_value(interface_collection->network_chart, iface->tx_dropped, -(txd_diff >> shift_amount));
-        }
+        interface_series_update(iface, VX_DISPLAY_BYTES);
+        curr_i = interface_series_update(iface, VX_DISPLAY_PACKETS);
+        InterfaceStats *curr = &iface->buffer.data[curr_i];
 
         // Labels
         if (selector.selected == iface) {
             switch (selector.display_mode) {
-
             case VX_DISPLAY_BYTES:
-                update_interface_label(interface_collection->network_rx_label, curr->rx_bytes, rx_diff, iface->buffer.count - 1, iface->diff_sma.rx_bytes, RTNL_LINK_RX_BYTES);
-                update_interface_label(interface_collection->network_tx_label, curr->tx_bytes, tx_diff, iface->buffer.count - 1, iface->diff_sma.tx_bytes, RTNL_LINK_TX_BYTES);
+                update_interface_label(interface_collection->network_rx_label, iface, curr->rx_bytes, VX_RX_BYTES);
+                update_interface_label(interface_collection->network_tx_label, iface, curr->tx_bytes, VX_TX_BYTES);
+                update_interface_label(interface_collection->network_rxd_label, iface, 0, VX_NONE);
+                update_interface_label(interface_collection->network_txd_label, iface, 0, VX_NONE);
                 break;
             case VX_DISPLAY_PACKETS:
-                update_interface_label(interface_collection->network_rx_label, curr->rx_packets, rxp_diff, iface->buffer.count - 1, iface->diff_sma.rx_packets, RTNL_LINK_RX_PACKETS);
-                update_interface_label(interface_collection->network_tx_label, curr->tx_packets, txp_diff, iface->buffer.count - 1, iface->diff_sma.tx_packets, RTNL_LINK_TX_PACKETS);
-                break;
-            case VX_DISPLAY_DROPPED:
-                update_interface_label(interface_collection->network_rx_label, curr->rx_dropped, rxd_diff, iface->buffer.count - 1, iface->diff_sma.rx_dropped, RTNL_LINK_RX_DROPPED);
-                update_interface_label(interface_collection->network_tx_label, curr->tx_dropped, txd_diff, iface->buffer.count - 1, iface->diff_sma.tx_dropped, RTNL_LINK_TX_DROPPED);
+                update_interface_label(interface_collection->network_rx_label, iface, curr->rx_packets, VX_RX_PACKETS);
+                update_interface_label(interface_collection->network_tx_label, iface, curr->tx_packets, VX_TX_PACKETS);
+                update_interface_label(interface_collection->network_rxd_label, iface, curr->rx_dropped, VX_RX_DROPPED);
+                update_interface_label(interface_collection->network_txd_label, iface, curr->tx_dropped, VX_TX_DROPPED);
             }
         }
     }
     return 0;
 }
 
-void interfaces_chart_change_visibility() {
+int interfaces_chart_change_visibility() {
     // hide all
     Interface* interface = interface_collection->input_head;
     while (interface) {
-        Interface_set_focus(interface, false, false);
+        if(Interface_set_focus(interface, false, false) < 0)
+            return -1;
         Vlan* vlan = interface->vlan_stats;
         while (vlan) {
-            Vlan_set_focus(vlan, false, false);
+            if (Vlan_set_focus(vlan, false, false) < 0)
+                return -1;
             vlan = vlan->next;
         }
         interface = interface->next;
     }
     interface = interface_collection->output_head;
     while (interface) {
-        Interface_set_focus(interface, false, false);
+        if (Interface_set_focus(interface, false, false) < 0)
+            return -1;
         interface = interface->next;
     }
 
@@ -601,7 +604,8 @@ void interfaces_chart_change_visibility() {
     switch (interface->type) {
 
     case VX_CLASS_INPUT_INTERFACE:
-        Interface_set_focus(interface, true, selector.display_mode);
+        if (Interface_set_focus(interface, true, selector.display_mode) < 0)
+            return -1;
         vlan = interface->vlan_stats;
         while (vlan) {
             if (vlan->line)
@@ -613,7 +617,8 @@ void interfaces_chart_change_visibility() {
         lv_label_set_text_fmt(interface_collection->network_label, "\uf053 %s bandwidth \uf054", interface->interface_name);
         break;
     case VX_CLASS_OUTPUT_INTERFACE:
-        Interface_set_focus(interface, true, selector.display_mode);
+        if (Interface_set_focus(interface, true, selector.display_mode) < 0)
+            return -1;
         Interface* iface = interface_collection->input_head;
         while (iface) {
             vlan = iface->vlan_stats;
@@ -629,13 +634,15 @@ void interfaces_chart_change_visibility() {
         lv_label_set_text_fmt(interface_collection->network_label, "\uf053 %s bandwidth \uf054", interface->interface_name);
         break;
     case VX_CLASS_VLAN:
-        Vlan_set_focus(vlan, true, selector.display_mode);
+        if (Vlan_set_focus(vlan, true, selector.display_mode) < 0)
+            return -1;
         lv_obj_set_style_image_opa(vlan->parent->image, LV_OPA_100, 0);
         if (vlan->redirection)
             lv_obj_set_style_image_opa(vlan->redirection->image, LV_OPA_100, 0);
         lv_label_set_text_fmt(interface_collection->network_label, "\uf053 %s.%d bandwidth \uf054", vlan->parent->interface_name, vlan->vlan_id);
         break;
     }
+    return 0;
 }
 
 int cpus_chart_update(CpuCollection* collection) {

@@ -2,14 +2,18 @@
   "interfaces": {
     "eth0": {
       "redirect_map": {
-        "none": "eth2"
+        "none": "eth3"
       }
     },
     "eth1": {
       "redirect_map": {
         "10": "eth3",
-        "11": "eth3",
-        "12": "eth2"
+        "11": "eth3"
+      }
+    },
+    "eth2": {
+      "redirect_map": {
+        "any": "eth3"
       }
     }
   }

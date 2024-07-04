@@ -11,6 +11,7 @@
 typedef struct InterfaceStats {
     uint64_t rx_bytes;
     uint64_t rx_packets;
+    uint64_t rx_dropped_bytes;
     uint64_t rx_dropped;
     uint64_t tx_bytes;
     uint64_t tx_packets;
@@ -37,8 +38,11 @@ typedef struct Vlan {
     struct InterfaceBuffer buffer;
     struct Vlan* prev;
     struct Vlan* next;
+    struct InterfaceStats diff;
     struct InterfaceStats diff_max;
     struct InterfaceStats diff_sma;
+    // --
+    struct Vlan*  padding;
     // Identifiers
     struct Interface* parent;
     struct Interface* redirection;
@@ -52,7 +56,10 @@ typedef struct Vlan {
     lv_obj_t*          network_chart;
     lv_chart_series_t* rx_bytes;
     lv_chart_series_t* rx_packets;
+    lv_chart_series_t* rx_dropped_bytes;
     lv_chart_series_t* rx_dropped;
+    int bytes_scale;
+    int packets_scale;
     lv_obj_t*          chart_label;
 } Vlan;
 
@@ -65,6 +72,7 @@ typedef struct Interface {
     struct InterfaceBuffer buffer;
     struct Interface* prev;
     struct Interface* next;
+    struct InterfaceStats diff;
     struct InterfaceStats diff_max;
     struct InterfaceStats diff_sma;
     // --
@@ -104,6 +112,8 @@ typedef struct InterfaceCollection {
     lv_obj_t* network_label;
     lv_obj_t* network_rx_label;
     lv_obj_t* network_tx_label;
+    lv_obj_t* network_rxd_label;
+    lv_obj_t* network_txd_label;
 } InterfaceCollection;
 
 // CPUs
@@ -165,7 +175,7 @@ Interface* add_output_interface(InterfaceCollection* collection, int if_index, c
 void Interface_up(Interface* interface);
 void Interface_down(Interface* interface);
 void Interface_refresh(Interface* interface);
-void Interface_set_focus(Interface* interface, const bool focus, const vx_display_mode mode);
+int  Interface_set_focus(Interface* interface, const bool focus, const vx_display_mode mode);
 void OutputInterface_position(Interface* interface, int i);
 void update_interface_data(Interface* interface, InterfaceStats time_interval_stats);
 
@@ -173,7 +183,7 @@ Vlan* add_or_update_vlan(Interface* interface, int vlan_id);
 void Vlan_reposition(Vlan* vlan);
 void Vlan_refresh(Vlan* vlan);
 void Vlan_visible(Vlan* vlan, const bool state);
-void Vlan_set_focus(Vlan* vlan, const bool focus, const vx_display_mode mode);
+int  Vlan_set_focus(Vlan* vlan, const bool focus, const vx_display_mode mode);
 void update_vlan_data(Vlan* vlan, InterfaceStats time_interval_stats);
 
 int  init_circular_buffer(InterfaceBuffer* buffer);

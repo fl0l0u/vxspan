@@ -127,32 +127,38 @@ void interface_update_sma(Interface* interface) {
 void vlan_update_sma(Vlan* vlan) {
     if (vlan->buffer.count < 2)
         return;
-    uint64_t diff_rx_bytes = 0, diff_rx_packets = 0, diff_rx_dropped = 0;
-    double acc_rx_bytes = 0, acc_rx_packets = 0, acc_rx_dropped = 0;
+    uint64_t diff_rx_bytes = 0, diff_rx_packets = 0, diff_rx_dropped = 0, diff_rx_dropped_bytes = 0;
+    double    acc_rx_bytes = 0,  acc_rx_packets = 0,  acc_rx_dropped = 0,  acc_rx_dropped_bytes = 0;
     int start = (vlan->buffer.head + VX_NETWORK_CHART_SIZE + 1 - vlan->buffer.count) % (VX_NETWORK_CHART_SIZE + 1);
     for(int i = 0; i < vlan->buffer.count - 1; i++) {
          InterfaceStats *curr = &vlan->buffer.data[(start + i + 1) % (VX_NETWORK_CHART_SIZE + 1)],
                         *prev = &vlan->buffer.data[(start + i) % (VX_NETWORK_CHART_SIZE + 1)];
-        diff_rx_bytes   = curr->rx_bytes   - prev->rx_bytes;
-        diff_rx_packets = curr->rx_packets - prev->rx_packets;
-        diff_rx_dropped = curr->rx_dropped - prev->rx_dropped;
+        diff_rx_bytes         = curr->rx_bytes - prev->rx_bytes;
+        diff_rx_packets       = curr->rx_packets - prev->rx_packets;
+        diff_rx_dropped_bytes = curr->rx_dropped_bytes - prev->rx_dropped_bytes;
+        diff_rx_dropped       = curr->rx_dropped - prev->rx_dropped;
         if (vlan->diff_max.rx_bytes < diff_rx_bytes)
             vlan->diff_max.rx_bytes = diff_rx_bytes;
         if (vlan->diff_max.rx_packets < diff_rx_packets)
             vlan->diff_max.rx_packets = diff_rx_packets;
+        if (vlan->diff_max.rx_dropped_bytes < diff_rx_dropped_bytes)
+            vlan->diff_max.rx_dropped_bytes = diff_rx_dropped_bytes;
         if (vlan->diff_max.rx_dropped < diff_rx_dropped)
             vlan->diff_max.rx_dropped = diff_rx_dropped;
 
-        acc_rx_bytes   += (double)diff_rx_bytes;
-        acc_rx_packets += (double)diff_rx_packets;
-        acc_rx_dropped += (double)diff_rx_dropped;
+        acc_rx_bytes         += (double)diff_rx_bytes;
+        acc_rx_packets       += (double)diff_rx_packets;
+        acc_rx_dropped_bytes += (double)diff_rx_dropped_bytes;
+        acc_rx_dropped       += (double)diff_rx_dropped;
     }
-    vlan->diff.rx_bytes   = diff_rx_bytes;
-    vlan->diff.rx_packets = diff_rx_packets;
-    vlan->diff.rx_dropped = diff_rx_dropped;
-    vlan->diff_sma.rx_bytes   = (uint64_t)(acc_rx_bytes   / (double)vlan->buffer.count);
-    vlan->diff_sma.rx_packets = (uint64_t)(acc_rx_packets / (double)vlan->buffer.count);
-    vlan->diff_sma.rx_dropped = (uint64_t)(acc_rx_dropped / (double)vlan->buffer.count);
+    vlan->diff.rx_bytes         = diff_rx_bytes;
+    vlan->diff.rx_packets       = diff_rx_packets;
+    vlan->diff.rx_dropped_bytes = diff_rx_dropped_bytes;
+    vlan->diff.rx_dropped       = diff_rx_dropped;
+    vlan->diff_sma.rx_bytes         = (uint64_t)(acc_rx_bytes   / (double)vlan->buffer.count);
+    vlan->diff_sma.rx_packets       = (uint64_t)(acc_rx_packets / (double)vlan->buffer.count);
+    vlan->diff_sma.rx_dropped_bytes = (uint64_t)(acc_rx_dropped_bytes / (double)vlan->buffer.count);
+    vlan->diff_sma.rx_dropped       = (uint64_t)(acc_rx_dropped / (double)vlan->buffer.count);
 }
 
 // Function to find the highest set bit position in a value

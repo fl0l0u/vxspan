@@ -8,6 +8,7 @@
 struct vlan_stats {
     __u64 bytes;
     __u64 packets;
+    __u64 dropped_bytes;
     __u64 dropped;
 };
 

@@ -40,30 +40,32 @@ int collect_interfaces_data(InterfaceCollection* collection) {
     Interface* interface = collection->input_head;
 
     bool vlans[4096];
+    memset(vlans, false, 4096);
 
     while (interface) {
+        // printf("[%s]", ((lv_label_t*)interface->name)->text);
         InterfaceStats interface_stats;
         if (collect_interface_data(interface->if_index, &interface_stats))
             return -1;
         update_interface_data(interface, interface_stats);
 
         int map_fd = interface->vlan_stats_fd;
-        long long key, prev_key;
-        key = -1;
+        long long key = 0, prev_key = -1;
         // Collect from BPF map VLAN list
         if (interface->type == VX_CLASS_INPUT_INTERFACE) {
             while(bpf_map_get_next_key(map_fd, &prev_key, &key) == 0) {
                 int vlan_id = key;
+                // printf(" %d", vlan_id);
                 struct vlan_stats value;
                 if (bpf_map_lookup_elem(map_fd, &key, &value) < 0) {
-                    printf("DEBUG %d, %lld, %u\n", map_fd, key, &value);
                     perror("collect_interfaces_data: bpf_map_lookup_elem");
                     return -1;
                 }
                 InterfaceStats interface_stats = {
-                    .rx_bytes   = value.bytes,
-                    .rx_packets = value.packets,
-                    .rx_dropped = value.dropped
+                    .rx_bytes         = value.bytes,
+                    .rx_packets       = value.packets,
+                    .rx_dropped_bytes = value.dropped_bytes,
+                    .rx_dropped       = value.dropped
                 };
                 Vlan* vlan = add_or_update_vlan(interface, vlan_id);
                 if (!vlan)
@@ -74,7 +76,7 @@ int collect_interfaces_data(InterfaceCollection* collection) {
             }
             // Fill stats for configured VLANs with no data in BPF map
             Vlan* vlan = interface->vlan_stats;
-            InterfaceStats zeros = {.rx_bytes = 0, .rx_packets = 0, .rx_dropped = 0};
+            InterfaceStats zeros = {.rx_bytes = 0, .rx_packets = 0, .rx_dropped = 0, .rx_dropped_bytes = 0};
             while (vlan) {
                 if (!vlans[vlan->vlan_id]) {
                     if (vlan->buffer.count > 0) {
@@ -86,6 +88,7 @@ int collect_interfaces_data(InterfaceCollection* collection) {
                 vlan = vlan->next;
             }
         }
+        // puts("");
         interface = interface->next;
     }
 
@@ -149,30 +152,6 @@ int collect_memory_data(MemoryCollection* collection) {
         return -1;
     }
     // Self
-    /*
-    FILE *file;
-    char fstatm[1024];
-    file = fopen("/proc/self/status", "r");
-    if (file == NULL) {
-        perror("Error opening file /proc/self/status");
-        exit(EXIT_FAILURE);
-    }
-    char line[128];
-    uint64_t vmrss;
-    while (fgets(line, 128, file) != NULL){
-        if (strncmp(line, "VmRSS:", 6) == 0){
-            int i = strlen(line);
-            const char* p = line;
-            while (*p < '0' || *p > '9')
-                p++;
-            line[i-3] = '\0';
-            vmrss = atol(p);
-            break;
-        }
-    }
-    fclose(file);
-    update_memory_data(memory->next, vmrss*1000);
-*/
     struct rusage r_usage;
     getrusage(RUSAGE_SELF,&r_usage);
     update_memory_data(memory->next, r_usage.ru_maxrss*1024);

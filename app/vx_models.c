@@ -95,6 +95,43 @@ InterfaceCollection* init_interfaces() {
     lv_obj_set_pos(network_tx_label, 8, 220 + 192 - 16 - 2);
     collection->network_tx_label = network_tx_label;
 
+    lv_obj_t *network_rxd_label = lv_label_create(lv_scr_act());
+    if (!network_rxd_label) {
+        perror("lv_label_create allocation failed");
+        lv_obj_del(network_tx_label);
+        lv_obj_del(network_rx_label);
+        lv_obj_del(network_chart);
+        lv_obj_del(network_label);
+        free(collection);
+        return NULL;
+    }
+    lv_obj_set_size(network_rxd_label, 780, 16);
+    lv_obj_set_style_text_align(network_rxd_label, LV_TEXT_ALIGN_LEFT, 0);
+    lv_obj_set_style_text_font(network_rxd_label, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_letter_space(network_rxd_label, -1, 0);
+    lv_obj_set_style_text_color(network_rxd_label, VX_RED_PALETTE, 0);
+    lv_obj_set_pos(network_rxd_label, 8, 220 + 16 + 2);
+    collection->network_rxd_label = network_rxd_label;
+
+    lv_obj_t *network_txd_label = lv_label_create(lv_scr_act());
+    if (!network_txd_label) {
+        perror("lv_label_create allocation failed");
+        lv_obj_del(network_rxd_label);
+        lv_obj_del(network_tx_label);
+        lv_obj_del(network_rx_label);
+        lv_obj_del(network_chart);
+        lv_obj_del(network_label);
+        free(collection);
+        return NULL;
+    }
+    lv_obj_set_size(network_txd_label, 780, 16);
+    lv_obj_set_style_text_align(network_txd_label, LV_TEXT_ALIGN_LEFT, 0);
+    lv_obj_set_style_text_font(network_txd_label, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_letter_space(network_txd_label, -1, 0);
+    lv_obj_set_style_text_color(network_txd_label, VX_RED_PALETTE, 0);
+    lv_obj_set_pos(network_txd_label, 8, 220 + 192 - 32 - 2);
+    collection->network_txd_label = network_txd_label;
+
     return collection;
 }
 
@@ -178,7 +215,7 @@ Interface* add_input_interface(InterfaceCollection* collection, int if_index, co
 
     Interface_refresh(new_interface);
 
-    lv_chart_series_t* rx_bytes = lv_chart_add_series(collection->network_chart, VX_GREEN_PALETTE, LV_CHART_AXIS_PRIMARY_Y);
+    lv_chart_series_t* rx_bytes = lv_chart_add_series(collection->network_chart, VX_INPUT_RX_COLOR, LV_CHART_AXIS_PRIMARY_Y);
     if (!rx_bytes) {
         perror("lv_chart_add_series allocation failed");
         lv_obj_del(xdp_mode);
@@ -190,7 +227,7 @@ Interface* add_input_interface(InterfaceCollection* collection, int if_index, co
     }
     new_interface->rx_bytes = rx_bytes;
 
-    lv_chart_series_t* rx_packets = lv_chart_add_series(collection->network_chart, VX_GREEN_PALETTE, LV_CHART_AXIS_PRIMARY_Y);
+    lv_chart_series_t* rx_packets = lv_chart_add_series(collection->network_chart, VX_INPUT_RX_COLOR, LV_CHART_AXIS_PRIMARY_Y);
     if (!rx_packets) {
         perror("lv_chart_add_series allocation failed");
         lv_chart_remove_series(collection->network_chart, rx_bytes);
@@ -203,7 +240,7 @@ Interface* add_input_interface(InterfaceCollection* collection, int if_index, co
     }
     new_interface->rx_packets = rx_packets;
 
-    lv_chart_series_t* rx_dropped = lv_chart_add_series(collection->network_chart, VX_ORANGE_PALETTE, LV_CHART_AXIS_PRIMARY_Y);
+    lv_chart_series_t* rx_dropped = lv_chart_add_series(collection->network_chart, VX_INPUT_RXD_COLOR, LV_CHART_AXIS_PRIMARY_Y);
     if (!rx_dropped) {
         perror("lv_chart_add_series allocation failed");
         lv_chart_remove_series(collection->network_chart, rx_packets);
@@ -217,7 +254,7 @@ Interface* add_input_interface(InterfaceCollection* collection, int if_index, co
     }
     new_interface->rx_dropped = rx_dropped;
 
-    lv_chart_series_t* tx_bytes = lv_chart_add_series(collection->network_chart, VX_ORANGE_PALETTE, LV_CHART_AXIS_PRIMARY_Y);
+    lv_chart_series_t* tx_bytes = lv_chart_add_series(collection->network_chart, VX_INPUT_TX_COLOR, LV_CHART_AXIS_PRIMARY_Y);
     if (!tx_bytes) {
         perror("lv_chart_add_series allocation failed");
         lv_chart_remove_series(collection->network_chart, rx_dropped);
@@ -232,7 +269,7 @@ Interface* add_input_interface(InterfaceCollection* collection, int if_index, co
     }
     new_interface->tx_bytes = tx_bytes;
 
-    lv_chart_series_t* tx_packets = lv_chart_add_series(collection->network_chart, VX_ORANGE_PALETTE, LV_CHART_AXIS_PRIMARY_Y);
+    lv_chart_series_t* tx_packets = lv_chart_add_series(collection->network_chart, VX_INPUT_TX_COLOR, LV_CHART_AXIS_PRIMARY_Y);
     if (!tx_packets) {
         perror("lv_chart_add_series allocation failed");
         lv_chart_remove_series(collection->network_chart, tx_bytes);
@@ -248,7 +285,7 @@ Interface* add_input_interface(InterfaceCollection* collection, int if_index, co
     }
     new_interface->tx_packets = tx_packets;
 
-    lv_chart_series_t* tx_dropped = lv_chart_add_series(collection->network_chart, VX_RED_PALETTE, LV_CHART_AXIS_PRIMARY_Y);
+    lv_chart_series_t* tx_dropped = lv_chart_add_series(collection->network_chart, VX_INPUT_TXD_COLOR, LV_CHART_AXIS_PRIMARY_Y);
     if (!tx_dropped) {
         perror("lv_chart_add_series allocation failed");
         lv_chart_remove_series(collection->network_chart, tx_packets);
@@ -364,7 +401,7 @@ Interface* add_output_interface(InterfaceCollection* collection, int if_index, c
 
     Interface_refresh(new_interface);
 
-    lv_chart_series_t* rx_bytes = lv_chart_add_series(collection->network_chart, VX_GREEN_PALETTE, LV_CHART_AXIS_PRIMARY_Y);
+    lv_chart_series_t* rx_bytes = lv_chart_add_series(collection->network_chart, VX_OUTPUT_RX_COLOR, LV_CHART_AXIS_PRIMARY_Y);
     if (!rx_bytes) {
         perror("lv_chart_add_series allocation failed");
         lv_obj_del(status);
@@ -375,7 +412,7 @@ Interface* add_output_interface(InterfaceCollection* collection, int if_index, c
     }
     new_interface->rx_bytes = rx_bytes;
 
-    lv_chart_series_t* rx_packets = lv_chart_add_series(collection->network_chart, VX_GREEN_PALETTE, LV_CHART_AXIS_PRIMARY_Y);
+    lv_chart_series_t* rx_packets = lv_chart_add_series(collection->network_chart, VX_OUTPUT_RX_COLOR, LV_CHART_AXIS_PRIMARY_Y);
     if (!rx_packets) {
         perror("lv_chart_add_series allocation failed");
         lv_chart_remove_series(collection->network_chart, rx_bytes);
@@ -387,7 +424,7 @@ Interface* add_output_interface(InterfaceCollection* collection, int if_index, c
     }
     new_interface->rx_packets = rx_packets;
 
-    lv_chart_series_t* rx_dropped = lv_chart_add_series(collection->network_chart, VX_RED_PALETTE, LV_CHART_AXIS_PRIMARY_Y);
+    lv_chart_series_t* rx_dropped = lv_chart_add_series(collection->network_chart, VX_OUTPUT_RXD_COLOR, LV_CHART_AXIS_PRIMARY_Y);
     if (!rx_dropped) {
         perror("lv_chart_add_series allocation failed");
         lv_chart_remove_series(collection->network_chart, rx_packets);
@@ -400,7 +437,7 @@ Interface* add_output_interface(InterfaceCollection* collection, int if_index, c
     }
     new_interface->rx_dropped = rx_dropped;
 
-    lv_chart_series_t* tx_bytes = lv_chart_add_series(collection->network_chart, VX_ORANGE_PALETTE,   LV_CHART_AXIS_PRIMARY_Y);
+    lv_chart_series_t* tx_bytes = lv_chart_add_series(collection->network_chart, VX_OUTPUT_TX_COLOR,   LV_CHART_AXIS_PRIMARY_Y);
     if (!tx_bytes) {
         perror("lv_chart_add_series allocation failed");
         lv_chart_remove_series(collection->network_chart, rx_dropped);
@@ -414,7 +451,7 @@ Interface* add_output_interface(InterfaceCollection* collection, int if_index, c
     }
     new_interface->tx_bytes = tx_bytes;
 
-    lv_chart_series_t* tx_packets = lv_chart_add_series(collection->network_chart, VX_ORANGE_PALETTE,   LV_CHART_AXIS_PRIMARY_Y);
+    lv_chart_series_t* tx_packets = lv_chart_add_series(collection->network_chart, VX_OUTPUT_TX_COLOR,   LV_CHART_AXIS_PRIMARY_Y);
     if (!tx_packets) {
         perror("lv_chart_add_series allocation failed");
         lv_chart_remove_series(collection->network_chart, tx_bytes);
@@ -429,7 +466,7 @@ Interface* add_output_interface(InterfaceCollection* collection, int if_index, c
     }
     new_interface->tx_packets = tx_packets;
 
-    lv_chart_series_t* tx_dropped = lv_chart_add_series(collection->network_chart, VX_PURPLE_PALETTE,   LV_CHART_AXIS_PRIMARY_Y);
+    lv_chart_series_t* tx_dropped = lv_chart_add_series(collection->network_chart, VX_OUTPUT_TXD_COLOR,   LV_CHART_AXIS_PRIMARY_Y);
     if (!tx_dropped) {
         perror("lv_chart_add_series allocation failed");
         lv_chart_remove_series(collection->network_chart, tx_packets);
@@ -512,15 +549,24 @@ void Interface_refresh(Interface* interface) {
             Interface_down(interface);
         }
 }
-void Interface_set_focus(Interface* interface, bool focus, vx_display_mode mode) {
+int Interface_set_focus(Interface* interface, bool focus, vx_display_mode mode) {
     lv_obj_set_style_image_opa(interface->image, focus ? LV_OPA_100 : LV_OPA_50, 0);
+    if (focus) {
+        char interface_name[IFNAMSIZ];
+        if(!if_indextoname(interface->if_index, interface_name)) {
+            perror("if_indextoname");
+            return -1;
+        }
+        lv_label_set_text(interface->name, interface_name);
+    }
     lv_obj_set_style_bg_opa(interface->name, !focus ? LV_OPA_0 : LV_OPA_50, 0);
-    lv_chart_hide_series(interface->parent->network_chart, interface->rx_bytes,   !(focus && (mode == VX_DISPLAY_BYTES)));
-    lv_chart_hide_series(interface->parent->network_chart, interface->tx_bytes,   !(focus && (mode == VX_DISPLAY_BYTES)));
+    lv_chart_hide_series(interface->parent->network_chart, interface->rx_bytes, !(focus && (mode == VX_DISPLAY_BYTES)));
+    lv_chart_hide_series(interface->parent->network_chart, interface->tx_bytes, !(focus && (mode == VX_DISPLAY_BYTES)));
     lv_chart_hide_series(interface->parent->network_chart, interface->rx_packets, !(focus && (mode == VX_DISPLAY_PACKETS)));
     lv_chart_hide_series(interface->parent->network_chart, interface->tx_packets, !(focus && (mode == VX_DISPLAY_PACKETS)));
-    lv_chart_hide_series(interface->parent->network_chart, interface->rx_dropped, !(focus && (mode == VX_DISPLAY_DROPPED)));
-    lv_chart_hide_series(interface->parent->network_chart, interface->tx_dropped, !(focus && (mode == VX_DISPLAY_DROPPED)));
+    lv_chart_hide_series(interface->parent->network_chart, interface->rx_dropped, !(focus && (mode == VX_DISPLAY_PACKETS)));
+    lv_chart_hide_series(interface->parent->network_chart, interface->tx_dropped, !(focus && (mode == VX_DISPLAY_PACKETS)));
+    return 0;
 }
 
 void OutputInterface_position(Interface* interface, int i) {
@@ -558,27 +604,35 @@ Vlan* add_or_update_vlan(Interface* interface, int vlan_id) {
     new_vlan->vlan_id = vlan_id;
     init_circular_buffer(&new_vlan->buffer);
 
-    lv_chart_series_t* tmp_rx_bytes = lv_chart_add_series(interface->parent->network_chart, VX_GREEN_PALETTE, LV_CHART_AXIS_PRIMARY_Y);
+    lv_chart_series_t* tmp_rx_bytes = lv_chart_add_series(interface->parent->network_chart, VX_VLAN_RX_COLOR, LV_CHART_AXIS_PRIMARY_Y);
     if (!tmp_rx_bytes) {
         perror("lv_chart_add_series allocation failed");
-        lv_chart_remove_series(interface->parent->network_chart, tmp_rx_bytes);
         free(new_vlan);
         return NULL;
     }
     new_vlan->rx_bytes = tmp_rx_bytes;
 
-    lv_chart_series_t* tmp_rx_packets = lv_chart_add_series(interface->parent->network_chart, VX_GREEN_PALETTE, LV_CHART_AXIS_PRIMARY_Y);
+    lv_chart_series_t* tmp_rx_packets = lv_chart_add_series(interface->parent->network_chart, VX_VLAN_RX_COLOR, LV_CHART_AXIS_PRIMARY_Y);
     if (!tmp_rx_packets) {
         perror("lv_chart_add_series allocation failed");
-        lv_chart_remove_series(interface->parent->network_chart, tmp_rx_packets);
         lv_chart_remove_series(interface->parent->network_chart, tmp_rx_bytes);
         free(new_vlan);
         return NULL;
     }
     new_vlan->rx_packets = tmp_rx_packets;
 
-    lv_chart_series_t* tmp_rx_dropped = lv_chart_add_series(interface->parent->network_chart, VX_ORANGE_PALETTE, LV_CHART_AXIS_PRIMARY_Y);
+    lv_chart_series_t* tmp_rx_dropped = lv_chart_add_series(interface->parent->network_chart, VX_VLAN_RXD_COLOR, LV_CHART_AXIS_PRIMARY_Y);
     if (!tmp_rx_dropped) {
+        perror("lv_chart_add_series allocation failed");
+        lv_chart_remove_series(interface->parent->network_chart, tmp_rx_packets);
+        lv_chart_remove_series(interface->parent->network_chart, tmp_rx_bytes);
+        free(new_vlan);
+        return NULL;
+    }
+    new_vlan->rx_dropped = tmp_rx_dropped;
+
+    lv_chart_series_t* tmp_rx_dropped_bytes = lv_chart_add_series(interface->parent->network_chart, VX_VLAN_RXD_COLOR, LV_CHART_AXIS_PRIMARY_Y);
+    if (!tmp_rx_dropped_bytes) {
         perror("lv_chart_add_series allocation failed");
         lv_chart_remove_series(interface->parent->network_chart, tmp_rx_dropped);
         lv_chart_remove_series(interface->parent->network_chart, tmp_rx_packets);
@@ -586,7 +640,7 @@ Vlan* add_or_update_vlan(Interface* interface, int vlan_id) {
         free(new_vlan);
         return NULL;
     }
-    new_vlan->rx_dropped = tmp_rx_dropped;
+    new_vlan->rx_dropped_bytes = tmp_rx_dropped_bytes;
 
     // Lookup redirection for VLAN on interface
     new_vlan->redirection = NULL;
@@ -596,6 +650,7 @@ Vlan* add_or_update_vlan(Interface* interface, int vlan_id) {
             redirection_index = -1;
         else {
             perror("bpf_map_lookup_elem");
+            lv_chart_remove_series(interface->parent->network_chart, tmp_rx_dropped_bytes);
             lv_chart_remove_series(interface->parent->network_chart, tmp_rx_dropped);
             lv_chart_remove_series(interface->parent->network_chart, tmp_rx_packets);
             lv_chart_remove_series(interface->parent->network_chart, tmp_rx_bytes);
@@ -688,13 +743,24 @@ void Vlan_refresh(Vlan* vlan) {
             lv_obj_set_style_line_color(vlan->line, VX_ORANGE_PALETTE, 0);
     }
 }
-void Vlan_set_focus(Vlan* vlan, bool focus, vx_display_mode mode) {
+int Vlan_set_focus(Vlan* vlan, bool focus, vx_display_mode mode) {
     if (vlan->line)
         lv_obj_set_style_line_opa(vlan->line, focus ? LV_OPA_100 : LV_OPA_50, 0);
     // lv_obj_set_style_bg_opa(vlan->name, focus ? LV_OPA_100 : LV_OPA_50, 0);
-    lv_chart_hide_series(vlan->parent->parent->network_chart, vlan->rx_bytes,   !(focus && (mode == VX_DISPLAY_BYTES)));
+    lv_obj_set_style_bg_opa(vlan->parent->name, !focus ? LV_OPA_0 : LV_OPA_50, 0);
+    if (focus) {
+        char interface_name[IFNAMSIZ];
+        if(!if_indextoname(vlan->parent->if_index, interface_name)) {
+            perror("if_indextoname");
+            return -1;
+        }
+        lv_label_set_text_fmt(vlan->parent->name, "%s.%d", interface_name, vlan->vlan_id);
+    }
+    lv_chart_hide_series(vlan->parent->parent->network_chart, vlan->rx_bytes,         !(focus && (mode == VX_DISPLAY_BYTES)));
+    lv_chart_hide_series(vlan->parent->parent->network_chart, vlan->rx_dropped_bytes, !(focus && (mode == VX_DISPLAY_BYTES)));
     lv_chart_hide_series(vlan->parent->parent->network_chart, vlan->rx_packets, !(focus && (mode == VX_DISPLAY_PACKETS)));
-    lv_chart_hide_series(vlan->parent->parent->network_chart, vlan->rx_dropped, !(focus && (mode == VX_DISPLAY_DROPPED)));
+    lv_chart_hide_series(vlan->parent->parent->network_chart, vlan->rx_dropped, !(focus && (mode == VX_DISPLAY_PACKETS)));
+    return 0;
 }
 void Vlan_visible(Vlan* vlan, const bool state) {
     if (vlan->line)

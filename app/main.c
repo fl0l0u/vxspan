@@ -42,7 +42,7 @@ void setup_filesystems() {
         perror("Error running mdev");
     }
     // echo /bin/mdev > /proc/sys/kernel/hotplug
-    int fd = open("sys/class/leds/NAME:COLOR:LOCATION/brightness", O_WRONLY);
+    int fd = open("/proc/sys/kernel/hotplug", O_WRONLY);
     if (fd != 1) {
         write(fd, "/bin/mdev", 9);
         close(fd);
@@ -52,7 +52,8 @@ void setup_filesystems() {
 }
 
 void cleanup(int sig) {
-    xdp_cleanup(interface_collection);
+    if (interface_collection)
+        xdp_cleanup(interface_collection);
     rtnl_cleanup();
     exit(EXIT_FAILURE);
 }
@@ -114,10 +115,12 @@ int main(int argc, char const *argv[]) {
     selector.selected = (void*)interface_collection->input_head;
     selector.display_mode = VX_DISPLAY_BYTES;
 
-    interfaces_chart_change_visibility();
+    if (interfaces_chart_change_visibility()) {
+        cleanup(0);
+    }
 
     // Initialize timer
-    if (clock_gettime(CLOCK_REALTIME, &now) == -1) {
+    if (clock_gettime(CLOCK_MONOTONIC, &now) == -1) {
         perror("clock_gettime");
         cleanup(0);
     }
@@ -128,7 +131,7 @@ int main(int argc, char const *argv[]) {
     new_value.it_interval.tv_sec  = VX_REFRESH_TIME / 1000000000L;
     new_value.it_interval.tv_nsec = VX_REFRESH_TIME % 1000000000L;
 
-    int fd = timerfd_create(CLOCK_REALTIME, 0);
+    int fd = timerfd_create(CLOCK_MONOTONIC, 0);
     if (fd == -1) {
         perror("timerfd_create");
         cleanup(0);

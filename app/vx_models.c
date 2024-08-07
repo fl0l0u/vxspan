@@ -674,8 +674,8 @@ Vlan* add_or_update_vlan(Interface* interface, int vlan_id) {
         lv_obj_set_style_line_width(new_vlan->line, 3, 0);
 
         Vlan_reposition(new_vlan);
-        
         Vlan_refresh(new_vlan);
+        Vlan_set_focus(new_vlan, false, VX_DISPLAY_NONE);
     }
 
     // Insert
@@ -705,6 +705,7 @@ Vlan* add_or_update_vlan(Interface* interface, int vlan_id) {
             }
         }
     }
+
 
     return new_vlan;
 }

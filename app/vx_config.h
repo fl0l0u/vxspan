@@ -37,6 +37,7 @@
 // UI
 #define VX_TITLE   "VxSpan"
 #define VX_VERSION "0.1.1"
+#define VX_FOOTNOTE "[b] bytes [p] packets [left/right] select interface [up/down/home/end] display vlan"
 
 #define VX_RED_PALETTE    lv_palette_main(LV_PALETTE_RED)
 #define VX_GREEN_PALETTE  lv_palette_main(LV_PALETTE_GREEN)
@@ -107,6 +108,7 @@ static lv_img_dsc_t png_image_dsc = {
 };
 
 typedef enum {
+	VX_DISPLAY_NONE,
 	VX_DISPLAY_BYTES,
 	VX_DISPLAY_PACKETS
 } vx_display_mode;

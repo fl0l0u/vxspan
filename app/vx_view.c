@@ -72,6 +72,20 @@ int create_background() {
     lv_obj_set_style_bg_color(footer, VX_BLUE_PALETTE, 0);
     lv_obj_set_style_radius(footer, 0, 0);
     lv_obj_set_style_border_width(footer, 0, 0);
+
+    lv_obj_t* footnote = lv_label_create(scr);
+    if (!footnote) {
+        perror("lv_label_create allocation failed");
+        lv_obj_del(footer);
+        lv_obj_del(output_header);
+        lv_obj_del(title);
+        lv_obj_del(input_header);
+        return -1;
+    }
+    lv_label_set_text(footnote, VX_FOOTNOTE);
+    lv_obj_align(footnote, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_set_style_text_font(footnote, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(footnote, VX_GREY_COLOR, 0);
     return 0;
 }
 
@@ -171,6 +185,13 @@ void* select_interface(void* args) {
                     if (interfaces_chart_change_visibility() < 0)
                         exit(EXIT_FAILURE);
                     break;
+                case KEY_HOME:
+                    if (vlan->type == VX_CLASS_VLAN) {
+                        selector.selected = (void*)vlan->parent;
+                        if (interfaces_chart_change_visibility() < 0)
+                            exit(EXIT_FAILURE);
+                    }
+                    break;
                 case KEY_UP:
                     if (vlan->type == VX_CLASS_VLAN) {
                         if (vlan->prev) {
@@ -195,6 +216,22 @@ void* select_interface(void* args) {
                             if (interfaces_chart_change_visibility() < 0)
                                 exit(EXIT_FAILURE);
                         }
+                    }
+                    break;
+                case KEY_END:
+                    if (vlan->type == VX_CLASS_VLAN || vlan->type == VX_CLASS_INPUT_INTERFACE) {
+                        Vlan* tmp;
+                        if (vlan->type == VX_CLASS_VLAN) {
+                            tmp = vlan->parent->vlan_stats;
+                        } else {
+                            tmp = interface->vlan_stats;
+                        }
+                        while (tmp->next) {
+                            tmp = tmp->next;
+                        }
+                        selector.selected = (void*)tmp;
+                        if (interfaces_chart_change_visibility() < 0)
+                            exit(EXIT_FAILURE);
                     }
                     break;
                 case KEY_B:

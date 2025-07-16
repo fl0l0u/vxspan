@@ -13,6 +13,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include <sys/timerfd.h>
+#include <sys/klog.h>
 
 #include "lvgl/lvgl.h"
 
@@ -173,6 +174,7 @@ int main(int argc, char const *argv[]) {
 
             if (memory_chart_update(memory_collection) < 0)
                 cleanup(0);
+            klogctl(5, NULL, NULL);
         }
 
         pthread_mutex_lock(&main_mutex);
